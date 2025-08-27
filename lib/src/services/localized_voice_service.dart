@@ -1,21 +1,13 @@
-import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import '../services/voice_instruction_service.dart';
 import '../models/navigation_step.dart';
 import '../models/voice_settings.dart';
-import '../localization/navigation_localizations.dart';
-import '../utils/voice_utils.dart';
 
 /// Wrapper service that provides localized voice instructions
 class LocalizedVoiceService {
   final VoiceInstructionService _voiceService;
-  final BuildContext _context;
 
-  LocalizedVoiceService(this._voiceService, this._context);
-
-  /// Gets localized voice instructions
-  NavigationLocalizations get _localizations =>
-      NavigationLocalizations.of(_context);
+  LocalizedVoiceService(this._voiceService);
 
   /// Initialize the voice service
   Future<bool> initialize([VoiceSettings? settings]) =>
@@ -48,31 +40,12 @@ class LocalizedVoiceService {
   }) async {
     if (!isEnabled) return;
 
-    final distance =
-        remainingDistance ?? step.getRemainingDistance(currentPosition);
-
-    // Create localized voice instruction
-    final instruction = VoiceUtils.createVoiceInstruction(
-      baseInstruction: step.instruction,
-      remainingDistance: distance,
-      maneuverType: step.maneuver,
-      // Pass localized strings
-      turnLeftNow: _localizations.turnLeftNow,
-      turnRightNow: _localizations.turnRightNow,
-      mergeNow: _localizations.mergeNow,
-      takeTheExit: _localizations.takeTheExit,
-      enterRoundabout: _localizations.enterRoundabout,
-      prepareToTurnLeft: _localizations.prepareToTurnLeft,
-      prepareToTurnRight: _localizations.prepareToTurnRight,
-      prepareToMerge: _localizations.prepareToMerge,
-      prepareToExit: _localizations.prepareToExit,
-      prepareToEnterRoundabout: _localizations.prepareToEnterRoundabout,
-      prepareTo: _localizations.prepareTo,
-      inDistance: _localizations.inDistance,
-    );
-
     // Queue the instruction using the base service
-    await _voiceService.testAnnouncement(instruction);
+    await _voiceService.announceStep(
+      currentPosition: currentPosition,
+      step: step,
+      remainingDistance: remainingDistance,
+    );
   }
 
   /// Announces navigation start with localized text
@@ -82,44 +55,23 @@ class LocalizedVoiceService {
   }) async {
     if (!isEnabled) return;
 
-    final instruction = VoiceUtils.createNavigationStartAnnouncement(
+    await _voiceService.announceNavigationStart(
       destinationName: destinationName,
       totalDistance: totalDistance,
-      navigationStarting: _localizations.navigationStarting,
-      totalDistanceLabel: _localizations.totalDistanceLabel,
-      yourDestination: _localizations.yourDestination,
     );
-
-    await _voiceService.testAnnouncement(instruction);
   }
 
   /// Announces arrival with localized text
   Future<void> announceArrival({String? destinationName}) async {
     if (!isEnabled) return;
 
-    final instruction = VoiceUtils.createArrivalAnnouncement(
-      destinationName: destinationName,
-      youHaveArrived: _localizations.youHaveArrived,
-    );
-
-    await _voiceService.testAnnouncement(instruction);
+    await _voiceService.announceArrival(destinationName: destinationName);
   }
 
   /// Announces route recalculation with localized text
   Future<void> announceRouteRecalculation() async {
-    if (!isEnabled) return;
-
-    final instruction = VoiceUtils.createRouteRecalculationAnnouncement(
-      recalculatingRoute: _localizations.recalculatingRoute,
-    );
-
-    await _voiceService.testAnnouncement(instruction);
-  }
-
-  /// Test method with localized message
-  Future<void> testAnnouncement([String? message]) async {
-    final testMessage = message ?? _localizations.voiceTestMessage;
-    await _voiceService.testAnnouncement(testMessage);
+    // Delegate to the underlying voice service which handles the announceRouteRecalculation setting
+    await _voiceService.announceRouteRecalculation();
   }
 
   /// Check TTS availability

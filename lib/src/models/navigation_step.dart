@@ -222,7 +222,7 @@ class NavigationStep {
         .abs();
 
     // Convert back to meters (approximate)
-    return crossTrackDistance * 6371000; // Earth radius in meters
+    return crossTrackDistance * 6371000;
   }
 
   /// Creates a copy of this step with updated properties

@@ -13,7 +13,7 @@ import '../utils/logger.dart';
 /// Service for managing voice instructions during navigation
 class VoiceInstructionService {
   static const Logger _logger = NavigationLoggers.voice;
-  
+
   FlutterTts? _tts;
   VoiceSettings _settings = VoiceSettings.defaults();
 
@@ -243,17 +243,6 @@ class VoiceInstructionService {
     ));
   }
 
-  /// Test method to manually announce a simple message (for debugging)
-  Future<void> testAnnouncement([String? message]) async {
-    final testMessage = message ?? 'Voice instructions are working correctly';
-
-    await _queueInstruction(_VoiceInstruction(
-      text: testMessage,
-      priority: nav_constants.VoiceConstants.priorityUrgent,
-      instructionType: 'test',
-    ));
-  }
-
   /// Check if TTS is available and configured properly (for debugging)
   Future<Map<String, dynamic>> checkTTSAvailability() async {
     final result = <String, dynamic>{
@@ -319,7 +308,7 @@ class VoiceInstructionService {
     _instructionQueue.add(instruction);
     _instructionQueue.sort((a, b) => b.priority.compareTo(a.priority));
 
-    // Mark threshold as announced for this step 
+    // Mark threshold as announced for this step
     if (instruction.stepId != null && instruction.distance != null) {
       _announcedDistances.putIfAbsent(instruction.stepId!, () => <double>{});
       // Find the closest threshold that this distance is within and mark it

@@ -1,7 +1,5 @@
 import 'package:geolocator/geolocator.dart' as geo;
 
-/// A custom waypoint model that provides a cleaner interface for coordinate management
-/// while reducing dependency on external Position objects.
 class Waypoint {
   /// The latitude coordinate in decimal degrees
   final double latitude;

@@ -146,9 +146,9 @@ class VoiceException extends NavigationException {
 
   factory VoiceException.initializationFailed([String? details]) {
     return VoiceException(
-      details != null 
-        ? 'Voice service initialization failed: $details'
-        : 'Voice service initialization failed',
+      details != null
+          ? 'Voice service initialization failed: $details'
+          : 'Voice service initialization failed',
       code: 'VOICE_INIT_FAILED',
     );
   }
@@ -360,4 +360,14 @@ class ErrorHandler {
 
     effectiveLogger.warning(fullMessage, error);
   }
+}
+
+class MapboxDirectionsException implements Exception {
+  final String message;
+  final int statusCode;
+
+  const MapboxDirectionsException(this.message, this.statusCode);
+
+  @override
+  String toString() => 'MapboxDirectionsException: $message (HTTP $statusCode)';
 }

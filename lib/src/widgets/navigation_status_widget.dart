@@ -270,30 +270,30 @@ class NavigationStatusStyle {
 
   factory NavigationStatusStyle.defaultStyle() {
     return NavigationStatusStyle(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       statusTextStyle: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
-        color: Colors.black87,
+        color: Colors.white,
       ),
       progressTextStyle: const TextStyle(
         fontSize: 12,
-        color: Colors.black54,
-        fontWeight: FontWeight.w400,
+        color: Colors.white70,
+        fontWeight: FontWeight.w500,
       ),
-      indicatorSize: 8,
+      indicatorSize: 10,
       idleIndicatorColor: Colors.grey,
       calculatingIndicatorColor: Colors.orange,
       navigatingIndicatorColor: Colors.green,

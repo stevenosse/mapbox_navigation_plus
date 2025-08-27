@@ -53,7 +53,8 @@ class Logger {
   }
 
   /// Internal logging method
-  void _log(LogLevel level, String message, Object? error, StackTrace? stackTrace) {
+  void _log(
+      LogLevel level, String message, Object? error, StackTrace? stackTrace) {
     if (!_enableLogging || level.index < _globalLogLevel.index) {
       return;
     }
@@ -62,7 +63,6 @@ class Logger {
     final levelName = level.name.toUpperCase();
     final logMessage = '[$timestamp] [$levelName] [$_name] $message';
 
-    // Use developer.log for better integration with debugging tools
     developer.log(
       logMessage,
       time: DateTime.now(),
@@ -107,8 +107,9 @@ class NavigationLoggers {
   }) {
     Logger.setLogLevel(logLevel);
     Logger.setLoggingEnabled(enabled);
-    
-    general.info('Navigation logging initialized - Level: ${logLevel.name}, Enabled: $enabled');
+
+    general.info(
+        'Navigation logging initialized - Level: ${logLevel.name}, Enabled: $enabled');
   }
 
   /// Disable logging for production builds

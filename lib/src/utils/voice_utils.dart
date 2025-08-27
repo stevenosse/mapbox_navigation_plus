@@ -275,7 +275,6 @@ class VoiceUtils {
       return '$navigationStarting to $destination. $totalDistanceLabel: $distanceText';
     }
 
-    print('$navigationStarting to $destination');
     return '$navigationStarting to $destination';
   }
 

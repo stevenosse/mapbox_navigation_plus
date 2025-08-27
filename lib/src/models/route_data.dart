@@ -101,8 +101,8 @@ class RouteData {
     final routeGeometry = coordinates.map((coord) {
       final coordList = coord as List<dynamic>;
       return Waypoint.fromCoordinates(
-        coordList[1].toDouble(), // latitude
-        coordList[0].toDouble(), // longitude
+        coordList[1].toDouble(),
+        coordList[0].toDouble(),
       );
     }).toList();
 
@@ -168,7 +168,7 @@ class RouteData {
     try {
       return steps.firstWhere((step) => !step.isCompleted);
     } catch (e) {
-      return null; // All steps completed
+      return null;
     }
   }
 
@@ -267,8 +267,6 @@ class RouteData {
     );
   }
 
-  // Convenience methods for backward compatibility with Position objects
-
   /// Calculates the remaining distance from current position (Position compatibility)
   double getRemainingDistanceFromPosition(Position currentPosition) {
     return getRemainingDistance(Waypoint.fromPosition(currentPosition));
@@ -283,33 +281,6 @@ class RouteData {
   double getStepProgressFromPosition(
       Position currentPosition, NavigationStep step) {
     return getStepProgress(Waypoint.fromPosition(currentPosition), step);
-  }
-
-  /// Creates a RouteData from Mapbox response with Position objects (backward compatibility)
-  factory RouteData.fromMapboxResponseWithPositions(
-    Map<String, dynamic> route,
-    Position origin,
-    Position destination, {
-    List<Position>? waypoints,
-    String? profile,
-  }) {
-    return RouteData.fromMapboxResponse(
-      route,
-      Waypoint.fromPosition(origin),
-      Waypoint.fromPosition(destination),
-      waypoints: waypoints?.map((pos) => Waypoint.fromPosition(pos)).toList(),
-      profile: profile,
-    );
-  }
-
-  /// Converts geometry to Position objects for backward compatibility
-  List<Position> get geometryAsPositions {
-    return geometry.map((waypoint) => waypoint.toPosition()).toList();
-  }
-
-  /// Converts waypoints to Position objects for backward compatibility
-  List<Position>? get waypointsAsPositions {
-    return waypoints?.map((waypoint) => waypoint.toPosition()).toList();
   }
 
   /// Converts route geometry to GeoJSON LineString format

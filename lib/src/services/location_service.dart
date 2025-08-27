@@ -162,7 +162,8 @@ class LocationService {
     final nextPos = _simulationRoute![_simulationIndex + 1];
 
     // Calculate distance to next point
-    final distance = MathUtils.calculateDistanceBetweenPositions(currentPos, nextPos);
+    final distance =
+        MathUtils.calculateDistanceBetweenPositions(currentPos, nextPos);
 
     // Calculate how far we should move in this update
     final moveDistance = _simulationSpeed *
@@ -181,7 +182,8 @@ class LocationService {
           (nextPos.longitude - currentPos.longitude) * ratio;
 
       // Calculate bearing for heading
-      final bearing = MathUtils.calculateBearingBetweenPositions(currentPos, nextPos);
+      final bearing =
+          MathUtils.calculateBearingBetweenPositions(currentPos, nextPos);
 
       _currentSimulatedPosition = ObjectPools.positions.createPosition(
         latitude: newLat,
@@ -294,7 +296,7 @@ class LocationService {
   /// Disposes of the service and cleans up resources
   Future<void> dispose() async {
     stopAll();
-    
+
     // Close position controller if not already closed
     if (_positionController != null && !_positionController!.isClosed) {
       await _positionController!.close();

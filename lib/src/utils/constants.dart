@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Constants used throughout the navigation package
 class NavigationConstants {
   // Camera configuration
@@ -17,8 +19,8 @@ class NavigationConstants {
   static const int slowAnimationDuration = 2000;
 
   // Camera pitch settings
-  static const double overviewPitch = 0.0; // Top-down view
-  static const double navigationPitch = 60.0; // 3D navigation view
+  static const double overviewPitch = 0.0;
+  static const double navigationPitch = 60.0;
 
   // Distance thresholds (in meters)
   static const double stepAdvanceThreshold = 30.0;
@@ -26,10 +28,9 @@ class NavigationConstants {
   static const double recalculationThreshold = 100.0;
   static const double arrivalThreshold = 20.0;
 
-  // Location tracking
   static const double locationAccuracyThreshold = 10.0;
-  static const int locationUpdateInterval = 1000; // milliseconds
-  static const double simulationSpeed = 10.0; // m/s
+  static const int locationUpdateInterval = 100;
+  static const double simulationSpeed = 10.0;
 
   // UI dimensions
   static const double defaultPadding = 16.0;
@@ -43,7 +44,7 @@ class NavigationConstants {
 
   // Map configuration
   static const String defaultStyleUri = 'mapbox://styles/mapbox/streets-v12';
-  static const double defaultLatitude = 37.7749; // San Francisco
+  static const double defaultLatitude = 37.7749;
   static const double defaultLongitude = -122.4194;
 
   // API configuration
@@ -72,45 +73,95 @@ class NavigationConstants {
 
 /// Navigation status colors
 class NavigationColors {
-  static const idleColor = 0xFF9E9E9E; // Grey
-  static const calculatingColor = 0xFFFF9800; // Orange
-  static const navigatingColor = 0xFF4CAF50; // Green
-  static const pausedColor = 0xFFFFEB3B; // Yellow
-  static const arrivedColor = 0xFF2196F3; // Blue
-  static const errorColor = 0xFFF44336; // Red
+  static const idleColor = 0xFF9E9E9E;
+  static const calculatingColor = 0xFFFF9800;
+  static const navigatingColor = 0xFF4CAF50;
+  static const pausedColor = 0xFFFFEB3B;
+  static const arrivedColor = 0xFF2196F3;
+  static const errorColor = 0xFFF44336;
+}
+
+class NavigationTypography {
+  // Instruction banner text
+  static const double instructionTitleSize = 24.0;
+  static const double instructionSubtitleSize = 20.0;
+  static const FontWeight instructionTitleWeight = FontWeight.bold;
+  static const FontWeight instructionSubtitleWeight = FontWeight.w600;
+
+  // Control and status text
+  static const double statusTextSize = 14.0;
+  static const double progressTextSize = 16.0;
+  static const double hintTextSize = 12.0;
+  static const FontWeight statusTextWeight = FontWeight.w500;
+  static const FontWeight progressTextWeight = FontWeight.bold;
+
+  // Bottom bar text
+  static const double timeTextSize = 18.0;
+  static const double bottomProgressTextSize = 12.0;
+  static const FontWeight timeTextWeight = FontWeight.bold;
+  static const FontWeight bottomProgressTextWeight = FontWeight.w500;
+
+  // Speed limit text
+  static const double speedLimitNumberSize = 20.0;
+  static const double speedLimitUnitSize = 10.0;
+  static const FontWeight speedLimitNumberWeight = FontWeight.bold;
+  static const FontWeight speedLimitUnitWeight = FontWeight.w600;
+}
+
+class NavigationUIColors {
+  // Primary navigation blue gradient
+  static const navigationBlueStart = 0xFF4A90E2;
+  static const navigationBlueEnd = 0xFF357ABD;
+
+  // Dark overlays for controls
+  static const darkOverlay = 0xB3000000;
+  static const darkOverlayLight = 0x80000000;
+
+  // Button backgrounds
+  static const buttonOverlay = 0x33FFFFFF;
+  static const activeButtonOverlay = 0x4D2196F3;
+
+  // Text colors on dark backgrounds
+  static const primaryTextOnDark = 0xFFFFFFFF;
+  static const secondaryTextOnDark = 0xB3FFFFFF;
+  static const hintTextOnDark = 0x80FFFFFF;
+
+  // Speed limit widget colors
+  static const speedLimitBackground = 0xFFFFFFFF;
+  static const speedLimitBorder = 0xFF000000;
+  static const speedLimitText = 0xFF000000;
 }
 
 /// Route visualization constants
 class RouteVisualizationConstants {
-  // Route line styling
-  static const double routeBorderWidth = 12.0;
-  static const double routeTraveledWidth = 12.0;
-  static const int routeBorderColor = 0xFF1A1A1A; // Dark gray border
-  static const int routeDefaultColor = 0xFF007AFF; // Blue remaining route
-  static const int routeTraveledColor = 0xFF9E9E9E; // Gray traveled route
+  static const double routeBorderWidth = 16.0;
+  static const double routeTraveledWidth = 15.0;
+  static const double routeRemainingWidth = 15.0;
+  static const int routeBorderColor = 0xFF1976D2;
+  static const int routeDefaultColor = 0xFF2196F3;
+  static const int routeTraveledColor = 0xFF9E9E9E;
 
   // Traffic congestion colors
-  static const int trafficSevereColor =
-      0xFFDC143C; // Dark red for severe traffic
-  static const int trafficHeavyColor =
-      0xFFFF6347; // Red-orange for heavy traffic
-  static const int trafficModerateColor =
-      0xFFFFD700; // Yellow for moderate traffic
-  static const int trafficLightColor = 0xFF32CD32; // Green for light traffic
+  static const int trafficSevereColor = 0xFFDC143C;
+  static const int trafficHeavyColor = 0xFFFF6347;
+  static const int trafficModerateColor = 0xFFFFD700;
+  static const int trafficLightColor = 0xFF32CD32;
 
   // Route visualization settings
   static const double maxRouteLineWidth = 24.0;
-  static const double minRouteLineWidth = 4.0;
-  static const double routeOpacity = 0.8;
+  static const double minRouteLineWidth = 8.0;
+  static const double routeOpacity = 0.95;
 
   // GeoJSON properties
   static const String routeSourcePrefix = 'route-source-';
   static const String routeLayerPrefix = 'route-layer-';
   static const String routeBorderLayerPrefix = 'route-border-layer-';
 
-  // Traffic update intervals
-  static const int trafficUpdateIntervalMs = 30000; // 30 seconds
-  static const int routeRecalculationIntervalMs = 300000; // 5 minutes
+  // Enhanced update intervals for ultra-smooth tracing
+  static const int routeUpdateIntervalMs = 50;
+  static const int trafficUpdateIntervalMs = 15000;
+  static const int routeRecalculationIntervalMs = 300000;
+  static const int locationTrackingIntervalMs = 100;
 }
 
 /// Voice instruction constants
@@ -134,12 +185,9 @@ class VoiceConstants {
   static const double maxVolume = 1.0;
 
   // Timing constants
-  static const int defaultMinimumInterval =
-      10000; // 10 seconds between instructions
-  static const int urgentInstructionTimeout =
-      5000; // 5 seconds for urgent instructions
-  static const int ttsInitializationTimeout =
-      3000; // 3 seconds to initialize TTS
+  static const int defaultMinimumInterval = 10000;
+  static const int urgentInstructionTimeout = 5000;
+  static const int ttsInitializationTimeout = 3000;
 
   // Distance thresholds for voice announcements (meters)
   static const List<double> defaultAnnouncementDistances = [500.0, 200.0, 50.0];
@@ -158,10 +206,10 @@ class VoiceConstants {
 
   // TTS engine preferences (in order of preference)
   static const List<String> preferredTTSEngines = [
-    'com.google.android.tts', // Google TTS (Android)
-    'com.apple.speech.synthesis', // Apple TTS (iOS)
-    'com.samsung.android.bixby.voicewakeup', // Samsung TTS
-    'system_default', // System default
+    'com.google.android.tts',
+    'com.apple.speech.synthesis',
+    'com.samsung.android.bixby.voicewakeup',
+    'system_default',
   ];
 
   // Supported languages with their display names

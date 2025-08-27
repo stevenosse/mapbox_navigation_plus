@@ -20,7 +20,7 @@ class RetryUtils {
         return await operation();
       } catch (error) {
         attempts++;
-        
+
         // Don't retry if we've exceeded max attempts
         if (attempts > maxRetries) {
           rethrow;
@@ -38,12 +38,13 @@ class RetryUtils {
 
         // Wait before retrying with exponential backoff
         await Future.delayed(currentDelay);
-        
+
         // Calculate next delay with jitter to avoid thundering herd
-        final jitter = Random().nextDouble() * 0.1; // 10% jitter
+        final jitter = Random().nextDouble() * 0.1;
         currentDelay = Duration(
           milliseconds: min(
-            (currentDelay.inMilliseconds * backoffMultiplier * (1 + jitter)).round(),
+            (currentDelay.inMilliseconds * backoffMultiplier * (1 + jitter))
+                .round(),
             maxDelay.inMilliseconds,
           ),
         );
@@ -57,7 +58,7 @@ class RetryUtils {
   /// Default retry condition for common network and server errors
   static bool _shouldRetryByDefault(dynamic error) {
     final errorString = error.toString().toLowerCase();
-    
+
     // Retry on common network errors
     if (errorString.contains('timeout') ||
         errorString.contains('connection') ||
@@ -82,7 +83,8 @@ class RetryUtils {
   static bool Function(dynamic) retryOnHttpErrors(List<int> retryStatusCodes) {
     return (error) {
       final errorString = error.toString();
-      return retryStatusCodes.any((code) => errorString.contains(code.toString()));
+      return retryStatusCodes
+          .any((code) => errorString.contains(code.toString()));
     };
   }
 

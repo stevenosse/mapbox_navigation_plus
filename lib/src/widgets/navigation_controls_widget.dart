@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../controllers/navigation_controller.dart';
 import '../services/voice_instruction_service.dart';
-import '../utils/constants.dart' as nav_constants;
 
 /// Callback types for navigation control actions
 typedef VoidCallback = void Function();
@@ -30,6 +29,12 @@ class NavigationControlsWidget extends StatelessWidget {
   /// Callback for route recalculation button
   final VoidCallback? onRecalculateRoute;
 
+  /// Callback for pause/resume navigation button
+  final VoidCallback? onPauseResumeNavigation;
+
+  /// Whether navigation is currently paused
+  final bool isPaused;
+
   /// Custom styling for the controls widget
   final NavigationControlsStyle? style;
 
@@ -41,6 +46,9 @@ class NavigationControlsWidget extends StatelessWidget {
 
   /// Whether to show the recalculate route button
   final bool showRecalculateButton;
+
+  /// Whether to show the pause/resume button
+  final bool showPauseResumeButton;
 
   /// Custom positioning for the controls
   final NavigationControlsPosition position;
@@ -54,10 +62,13 @@ class NavigationControlsWidget extends StatelessWidget {
     this.onZoomIn,
     this.onZoomOut,
     this.onRecalculateRoute,
+    this.onPauseResumeNavigation,
+    this.isPaused = false,
     this.style,
     this.showVoiceToggle = true,
     this.showZoomControls = true,
     this.showRecalculateButton = true,
+    this.showPauseResumeButton = true,
     this.position = NavigationControlsPosition.rightCenter,
   });
 
@@ -82,8 +93,15 @@ class NavigationControlsWidget extends StatelessWidget {
           // Zoom controls
           if (showZoomControls) ..._buildZoomControls(effectiveStyle),
 
-          // Spacing between zoom and recalculate
-          if (showZoomControls && showRecalculateButton)
+          // Spacing between zoom and pause/resume
+          if (showZoomControls && showPauseResumeButton)
+            SizedBox(height: effectiveStyle.buttonSpacing),
+
+          // Pause/Resume button
+          if (showPauseResumeButton) _buildPauseResumeButton(effectiveStyle),
+
+          // Spacing between pause/resume and recalculate
+          if (showPauseResumeButton && showRecalculateButton)
             SizedBox(height: effectiveStyle.buttonSpacing),
 
           // Recalculate route button
@@ -122,6 +140,16 @@ class NavigationControlsWidget extends StatelessWidget {
     ];
   }
 
+  Widget _buildPauseResumeButton(NavigationControlsStyle style) {
+    return _buildControlButton(
+      icon: isPaused ? Icons.play_arrow : Icons.pause,
+      onPressed: onPauseResumeNavigation,
+      style: style,
+      isActive: isPaused,
+      tooltip: isPaused ? 'Resume navigation' : 'Pause navigation',
+    );
+  }
+
   Widget _buildRecalculateButton(NavigationControlsStyle style) {
     return _buildControlButton(
       icon: Icons.refresh,
@@ -138,29 +166,30 @@ class NavigationControlsWidget extends StatelessWidget {
     bool isActive = false,
     String? tooltip,
   }) {
-    final button = Material(
-      color: isActive ? style.activeButtonColor : style.buttonColor,
-      borderRadius: BorderRadius.circular(style.buttonRadius),
-      elevation: style.buttonElevation,
-      child: InkWell(
-        onTap: onPressed,
+    final button = Container(
+      width: style.buttonSize,
+      height: style.buttonSize,
+      decoration: BoxDecoration(
+        color: isActive ? style.activeButtonColor : style.buttonColor,
         borderRadius: BorderRadius.circular(style.buttonRadius),
-        child: Container(
-          width: style.buttonSize,
-          height: style.buttonSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(style.buttonRadius),
-            border: isActive
-                ? Border.all(
-                    color: style.activeBorderColor,
-                    width: style.activeBorderWidth,
-                  )
-                : null,
-          ),
-          child: Icon(
-            icon,
-            color: isActive ? style.activeIconColor : style.iconColor,
-            size: style.iconSize,
+        border: isActive
+            ? Border.all(
+                color: style.activeBorderColor,
+                width: style.activeBorderWidth,
+              )
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(style.buttonRadius),
+          child: Center(
+            child: Icon(
+              icon,
+              color: isActive ? style.activeIconColor : style.iconColor,
+              size: style.iconSize,
+            ),
           ),
         ),
       ),
@@ -224,30 +253,30 @@ class NavigationControlsStyle {
 
   factory NavigationControlsStyle.defaultStyle() {
     return NavigationControlsStyle(
-      margin: const EdgeInsets.only(right: 16, top: 100),
-      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(right: 16, top: 200),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      buttonSize: 48,
-      buttonRadius: 8,
-      buttonElevation: 2,
-      buttonSpacing: 8,
-      iconSize: nav_constants.NavigationConstants.iconSize,
-      buttonColor: Colors.white,
-      activeButtonColor: Colors.blue,
-      iconColor: Colors.black87,
+      buttonSize: 52,
+      buttonRadius: 12,
+      buttonElevation: 0,
+      buttonSpacing: 12,
+      iconSize: 28,
+      buttonColor: Colors.transparent,
+      activeButtonColor: Colors.blue.withValues(alpha: 0.3),
+      iconColor: Colors.white,
       activeIconColor: Colors.white,
       activeBorderColor: Colors.blue,
-      activeBorderWidth: 2,
+      activeBorderWidth: 1,
     );
   }
 

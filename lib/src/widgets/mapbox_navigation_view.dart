@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../models/navigation_state.dart';
+import '../models/route_data.dart';
 import '../models/navigation_step.dart';
 import '../services/location_service.dart';
 import '../services/mapbox_directions_api.dart';
@@ -13,6 +15,7 @@ import '../controllers/camera_controller.dart';
 import '../models/voice_settings.dart';
 import '../utils/voice_utils.dart';
 import '../utils/logger.dart';
+import '../widgets/speed_limit_widget.dart';
 import '../localization/navigation_localizations.dart';
 import 'navigation_instruction_widget.dart';
 import 'navigation_status_widget.dart';
@@ -98,6 +101,14 @@ class MapboxNavigationView extends StatefulWidget {
   /// Navigation instruction style
   final NavigationInstructionStyle? navigationInstructionStyle;
 
+  /// Whether to show the speed limit widget
+  final bool showSpeedLimit;
+
+  /// Custom speed limit widget
+  final SpeedLimitWidget? customSpeedLimitWidget;
+
+  final SpeedUnit speedUnit;
+
   const MapboxNavigationView({
     super.key,
     required this.accessToken,
@@ -115,6 +126,7 @@ class MapboxNavigationView extends StatefulWidget {
     this.onVoiceInstruction,
     this.language = 'en',
     this.overlayController,
+    this.speedUnit = SpeedUnit.kmh,
     this.customNavigationControls,
     this.customInstructionWidget,
     this.customStatusWidget,
@@ -125,6 +137,8 @@ class MapboxNavigationView extends StatefulWidget {
     this.navigationControlsStyle,
     this.navigationStatusStyle,
     this.navigationInstructionStyle,
+    this.showSpeedLimit = false,
+    this.customSpeedLimitWidget,
   });
 
   @override
@@ -133,7 +147,7 @@ class MapboxNavigationView extends StatefulWidget {
 
 class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   static const Logger _logger = NavigationLoggers.general;
-  
+
   MapboxMap? _mapboxMap;
   LocationService? _locationService;
   MapboxDirectionsAPI? _directionsAPI;
@@ -147,6 +161,13 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   NavigationStep? _currentStep;
   bool _isVoiceEnabled = false;
 
+  String? _lastRouteHash;
+
+  Timer? _routeUpdateTimer;
+
+  // Speed limit data from route annotations
+  int? _currentSpeedLimit;
+
   @override
   void initState() {
     super.initState();
@@ -157,7 +178,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   @override
   void dispose() {
-    // Dispose services asynchronously (best effort)
     _navigationController?.dispose().catchError((_) {});
     _locationService?.dispose().catchError((_) {});
     _directionsAPI?.dispose();
@@ -166,6 +186,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     if (widget.overlayController == null) {
       _overlayController.dispose();
     }
+    _stopRouteUpdateTimer();
     super.dispose();
   }
 
@@ -192,7 +213,8 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     _cameraController = NavigationServiceFactory.createCameraController();
     _cameraController!.initialize(_mapboxMap!);
 
-    _routeVisualizationService = NavigationServiceFactory.createRouteVisualizationService();
+    _routeVisualizationService =
+        NavigationServiceFactory.createRouteVisualizationService();
     await _routeVisualizationService!.initialize(_mapboxMap!);
 
     _navigationController = NavigationServiceFactory.createNavigationController(
@@ -216,6 +238,8 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           setState(() {
             _currentState = state;
           });
+
+          _updateSpeedLimitData();
           _updateOverlayWidgets();
           widget.onNavigationStateChanged?.call(state);
 
@@ -235,6 +259,8 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           setState(() {
             _currentStep = step;
           });
+
+          _updateSpeedLimitData();
           _updateOverlayWidgets();
           widget.onStepChanged?.call(step);
 
@@ -271,26 +297,49 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
     switch (state.status) {
       case NavigationStatus.navigating:
-        // Draw the route when navigation starts or route is recalculated
+        _startRouteUpdateTimer();
+
         if (state.route != null) {
-          final currentStepIndex = _navigationController!.currentStepIndex;
-          final currentPosition = state.currentPosition?.toPosition();
-          await _routeVisualizationService!.drawRoute(
-            state.route!,
-            currentStepIndex: currentStepIndex,
-            currentPosition: currentPosition,
-          );
+          final currentRouteHash = state.route!.hashCode.toString();
+
+          if (_lastRouteHash != currentRouteHash) {
+            _lastRouteHash = currentRouteHash;
+
+            final currentStepIndex = _navigationController!.currentStepIndex;
+            final currentPosition = state.currentPosition?.toPosition();
+            await _routeVisualizationService!.drawRoute(
+              state.route!,
+              currentStepIndex: currentStepIndex,
+              currentPosition: currentPosition,
+            );
+          } else {
+            final currentStepIndex = _navigationController!.currentStepIndex;
+            final currentPosition = state.currentPosition?.toPosition();
+
+            if (currentStepIndex != null && currentPosition != null) {
+              await _routeVisualizationService!.updateRouteProgress(
+                state.route!,
+                currentStepIndex,
+                currentPosition: currentPosition,
+                forceUpdate: true, // Force update for real-time tracing
+              );
+            }
+          }
         }
         break;
       case NavigationStatus.idle:
       case NavigationStatus.arrived:
+        _stopRouteUpdateTimer();
+
         // Clear the route when navigation is idle or arrived
         await _routeVisualizationService!.clearRoute();
+        _lastRouteHash = null; // Reset route hash
         break;
       case NavigationStatus.calculating:
       case NavigationStatus.paused:
       case NavigationStatus.error:
-        // Keep existing route visible during these states
+        _stopRouteUpdateTimer();
+
         break;
     }
   }
@@ -447,11 +496,21 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
                   _cameraController?.setZoom(currentZoom - 1.0);
                 },
                 onRecalculateRoute: () {
-                  final currentPosition = _currentState.currentPosition?.toPosition();
+                  final currentPosition =
+                      _currentState.currentPosition?.toPosition();
                   _navigationController?.recalculateRoute(
                     currentPosition: currentPosition,
                   );
                 },
+                onPauseResumeNavigation: () {
+                  if (_navigationController?.isPaused == true) {
+                    _navigationController?.resumeNavigation();
+                  } else {
+                    _navigationController?.pauseNavigation();
+                  }
+                  setState(() {}); // Refresh UI to show new pause state
+                },
+                isPaused: _navigationController?.isPaused ?? false,
               ),
           position: OverlayPosition.centerRight,
           offset: const Offset(16, 0),
@@ -473,6 +532,24 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           position: OverlayPosition.bottomCenter,
           offset: const Offset(0, 16),
           zIndex: 50,
+        ),
+      );
+    }
+
+    // Add speed limit widget if enabled
+    if (widget.showSpeedLimit) {
+      _overlayController.addOverlay(
+        OverlayConfig(
+          id: 'speed_limit',
+          widget: widget.customSpeedLimitWidget ??
+              SpeedLimitWidget(
+                speedLimit: _currentSpeedLimit,
+                unit: widget.speedUnit,
+                isVisible: _currentSpeedLimit != null,
+              ),
+          position: OverlayPosition.topLeft,
+          offset: const Offset(16, 80),
+          zIndex: 80,
         ),
       );
     }
@@ -506,11 +583,21 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
                   _cameraController?.setZoom(currentZoom - 1.0);
                 },
                 onRecalculateRoute: () {
-                  final currentPosition = _currentState.currentPosition?.toPosition();
+                  final currentPosition =
+                      _currentState.currentPosition?.toPosition();
                   _navigationController?.recalculateRoute(
                     currentPosition: currentPosition,
                   );
                 },
+                onPauseResumeNavigation: () {
+                  if (_navigationController?.isPaused == true) {
+                    _navigationController?.resumeNavigation();
+                  } else {
+                    _navigationController?.pauseNavigation();
+                  }
+                  setState(() {}); // Refresh UI to show new pause state
+                },
+                isPaused: _navigationController?.isPaused ?? false,
               ),
         );
       });
@@ -545,20 +632,160 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           id: 'navigation_instruction',
           widget: instructionWidget,
           position: OverlayPosition.topCenter,
-          offset: Offset(0, MediaQuery.of(context).padding.top + 16),
+          offset: Offset(0, -50),
           zIndex: 75,
         ),
       );
     } else {
       _overlayController.removeOverlay('navigation_instruction');
     }
+
+    if (widget.showSpeedLimit && _overlayController.hasOverlay('speed_limit')) {
+      _overlayController.updateOverlay('speed_limit', (config) {
+        return config.copyWith(
+          widget: widget.customSpeedLimitWidget ??
+              SpeedLimitWidget(
+                speedLimit: _currentSpeedLimit,
+                unit: widget.speedUnit,
+                isVisible: _currentSpeedLimit != null,
+              ),
+        );
+      });
+    }
+  }
+
+  /// Updates speed limit data based on current route and position
+  void _updateSpeedLimitData() {
+    if (_currentState.route == null || _currentStep == null) {
+      _currentSpeedLimit = null;
+      return;
+    }
+
+    final route = _currentState.route!;
+    int? previousSpeedLimit = _currentSpeedLimit;
+
+    // Extract speed limit from traffic annotations if available
+    if (route.trafficAnnotations != null &&
+        route.trafficAnnotations!.isNotEmpty) {
+      _currentSpeedLimit =
+          _extractSpeedLimitFromAnnotations(route.trafficAnnotations!);
+    }
+
+    // Fallback to inferring speed limit based on road type and area
+    _currentSpeedLimit ??= _inferSpeedLimitFromContext();
+
+    // If speed limit changed, trigger UI update
+    if (previousSpeedLimit != _currentSpeedLimit) {
+      if (mounted) {
+        setState(() {});
+      }
+    }
+
+    // Update current speed from location service
+    if (_currentState.currentPosition != null) {}
+  }
+
+  /// Extracts speed limit from Mapbox traffic annotations
+  int? _extractSpeedLimitFromAnnotations(List<TrafficAnnotation> annotations) {
+    if (annotations.isEmpty) return null;
+
+    // Filter annotations with valid speed data
+    final validSpeeds = annotations
+        .where(
+            (annotation) => annotation.speed != null && annotation.speed! > 0)
+        .toList();
+
+    if (validSpeeds.isEmpty) return null;
+
+    // Strategy 1: Use maximum observed speed as potential speed limit indicator
+    // This works on the assumption that in free-flow conditions,
+    // traffic speeds approach the posted speed limit
+    final maxSpeed = validSpeeds
+        .map((annotation) => annotation.speed!)
+        .reduce((a, b) => a > b ? a : b);
+
+    // Strategy 2: Look for segments with low congestion (free-flow conditions)
+    final freeFlowSpeeds = validSpeeds
+        .where((annotation) =>
+            annotation.congestion == 'low' ||
+            annotation.congestion == 'unknown')
+        .map((annotation) => annotation.speed!)
+        .toList();
+
+    double targetSpeed;
+    if (freeFlowSpeeds.isNotEmpty) {
+      // Use average of free-flow speeds as it's more reliable
+      targetSpeed =
+          freeFlowSpeeds.reduce((a, b) => a + b) / freeFlowSpeeds.length;
+    } else {
+      // Fallback to max speed, but adjust for congestion
+      targetSpeed = maxSpeed * 1.2; // Assume traffic is 20% slower than limit
+    }
+
+    // Convert km/h to mph and round to nearest 5 mph increment
+    // (common for speed limit posting)
+    final speedLimitMph = (targetSpeed * 0.621371).round();
+    final roundedLimit = ((speedLimitMph + 2) ~/ 5) * 5;
+
+    // Apply reasonable bounds for different road types
+    if (roundedLimit >= 65) {
+      return 70; // Highway speed
+    } else if (roundedLimit >= 50) {
+      return 55; // Major arterial
+    } else if (roundedLimit >= 35) {
+      return 45; // Urban arterial
+    } else if (roundedLimit >= 25) {
+      return 35; // Collector road
+    } else {
+      return 25; // Residential/local
+    }
+  }
+
+  /// Infers speed limit based on road context, maneuver type, and location
+  int? _inferSpeedLimitFromContext() {
+    if (_currentStep == null) return null;
+
+    final instruction = _currentStep!.instruction.toLowerCase();
+    final maneuver = _currentStep!.maneuver.toLowerCase();
+
+    // Highway/freeway detection
+    if (instruction.contains('highway') ||
+        instruction.contains('freeway') ||
+        instruction.contains('interstate') ||
+        instruction.contains('motorway')) {
+      return 70; // 70 mph typical highway speed
+    }
+
+    // Major road detection
+    if (instruction.contains('boulevard') ||
+        instruction.contains('avenue') ||
+        maneuver.contains('merge') ||
+        maneuver.contains('fork')) {
+      return 45; // 45 mph typical major road
+    }
+
+    // Residential/local road detection
+    if (instruction.contains('street') ||
+        instruction.contains('road') ||
+        instruction.contains('drive') ||
+        instruction.contains('lane')) {
+      return 25; // 25 mph typical residential
+    }
+
+    // Turn/intersection areas - lower speeds
+    if (maneuver.contains('turn') ||
+        maneuver.contains('continue') ||
+        instruction.contains('turn')) {
+      return 35; // 35 mph typical for turns
+    }
+
+    // Default urban speed limit
+    return 30;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Update overlay widgets when state changes
     _updateOverlayWidgets();
-
     return ManagedMapOverlay(
       controller: _overlayController,
       onOverlayTap: widget.onOverlayTap,
@@ -626,5 +853,41 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
         layerAbove: null,
       ),
     );
+  }
+
+  void _startRouteUpdateTimer() {
+    _routeUpdateTimer?.cancel();
+    _routeUpdateTimer = Timer.periodic(
+      const Duration(milliseconds: 50), // 50ms = 20fps for ultra-smooth updates
+      (_) => _performRouteUpdate(),
+    );
+  }
+
+  void _stopRouteUpdateTimer() {
+    _routeUpdateTimer?.cancel();
+    _routeUpdateTimer = null;
+  }
+
+  /// Performs a single route visualization update
+  void _performRouteUpdate() {
+    if (_routeVisualizationService == null ||
+        _navigationController == null ||
+        _currentState.status != NavigationStatus.navigating ||
+        _currentState.route == null) {
+      return;
+    }
+
+    final currentStepIndex = _navigationController!.currentStepIndex;
+    final currentPosition = _currentState.currentPosition?.toPosition();
+
+    if (currentStepIndex != null && currentPosition != null) {
+      // Fire-and-forget route update (no await to avoid blocking)
+      _routeVisualizationService!.updateRouteProgress(
+        _currentState.route!,
+        currentStepIndex,
+        currentPosition: currentPosition,
+        forceUpdate: true,
+      );
+    }
   }
 }

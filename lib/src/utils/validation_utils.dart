@@ -51,25 +51,25 @@ class ValidationUtils {
 
   /// Validates if speed is within reasonable range
   static bool isValidSpeed(double speed) {
-    return speed >= 0.0 && speed <= 200.0; // 200 m/s = 720 km/h
+    return speed >= 0.0 && speed <= 200.0;
   }
 
   /// Validates if accuracy is within acceptable range
   static bool isValidAccuracy(double accuracy) {
-    return accuracy >= 0.0 && accuracy <= 1000.0; // Max 1km accuracy
+    return accuracy >= 0.0 && accuracy <= 1000.0;
   }
 
   /// Validates if Mapbox access token format is correct
   static bool isValidMapboxToken(String token) {
     if (token.isEmpty || token.length < 10) return false;
-    // Mapbox tokens typically start with 'pk.' or 'sk.'
     return token.startsWith('pk.') || token.startsWith('sk.');
   }
 
   /// Throws ArgumentError if token is invalid
   static void validateMapboxToken(String token) {
     if (!isValidMapboxToken(token)) {
-      throw ArgumentError('Invalid Mapbox access token format. Must start with pk. or sk. and be at least 10 characters long.');
+      throw ArgumentError(
+          'Invalid Mapbox access token format. Must start with pk. or sk. and be at least 10 characters long.');
     }
   }
 
@@ -86,7 +86,7 @@ class ValidationUtils {
   /// Validates if two coordinates are different (not the same point)
   static bool areCoordinatesDifferent(
       double lat1, double lon1, double lat2, double lon2) {
-    const double tolerance = 0.000001; // ~0.1 meters
+    const double tolerance = 0.000001;
     return (lat1 - lat2).abs() > tolerance || (lon1 - lon2).abs() > tolerance;
   }
 
@@ -103,16 +103,17 @@ class ValidationUtils {
 
   /// Validates if simulation speed is within reasonable range
   static bool isValidSimulationSpeed(double speed) {
-    return speed > 0.0 && speed <= 100.0; // Max 100 m/s for simulation
+    return speed > 0.0 && speed <= 100.0;
   }
 
   /// Validates if animation duration is reasonable
   static bool isValidAnimationDuration(int duration) {
-    return duration >= 0 && duration <= 10000; // Max 10 seconds
+    return duration >= 0 && duration <= 10000;
   }
 
   /// Validates coordinates and throws ArgumentError if invalid
-  static void validateCoordinates(double latitude, double longitude, {String? context}) {
+  static void validateCoordinates(double latitude, double longitude,
+      {String? context}) {
     if (!isValidCoordinate(latitude, longitude)) {
       throw ArgumentError(
         'Invalid coordinates: lat=$latitude, lng=$longitude. '
@@ -124,7 +125,8 @@ class ValidationUtils {
 
   /// Validates waypoint and throws ArgumentError if invalid
   static void validateWaypoint(Waypoint waypoint, {String? context}) {
-    validateCoordinates(waypoint.latitude, waypoint.longitude, context: context);
+    validateCoordinates(waypoint.latitude, waypoint.longitude,
+        context: context);
   }
 
   /// Validates route parameters
@@ -136,10 +138,12 @@ class ValidationUtils {
   }) {
     validateWaypoint(origin, context: 'origin');
     validateWaypoint(destination, context: 'destination');
-    
+
     if (!areCoordinatesDifferent(
-      origin.latitude, origin.longitude,
-      destination.latitude, destination.longitude,
+      origin.latitude,
+      origin.longitude,
+      destination.latitude,
+      destination.longitude,
     )) {
       throw ArgumentError('Origin and destination must be different locations');
     }

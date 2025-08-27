@@ -14,7 +14,6 @@ class CoordinateUtils {
   }
 
   /// Converts a Waypoint to a Position with default values
-  /// Note: Position requires timestamp and accuracy, which Waypoint doesn't have
   static geo.Position waypointToPosition(
     Waypoint waypoint, {
     DateTime? timestamp,
@@ -86,7 +85,8 @@ class CoordinateUtils {
   }
 
   /// Extracts just the coordinate information as a simple record
-  static ({double latitude, double longitude}) extractCoordinates(dynamic point) {
+  static ({double latitude, double longitude}) extractCoordinates(
+      dynamic point) {
     if (point is geo.Position) {
       return (latitude: point.latitude, longitude: point.longitude);
     } else if (point is Waypoint) {
@@ -97,16 +97,13 @@ class CoordinateUtils {
   }
 
   /// Checks if two coordinate objects represent the same location
-  static bool areCoordinatesEqual(
-    dynamic point1, 
-    dynamic point2, 
-    {double tolerance = 0.000001}
-  ) {
+  static bool areCoordinatesEqual(dynamic point1, dynamic point2,
+      {double tolerance = 0.000001}) {
     final coord1 = extractCoordinates(point1);
     final coord2 = extractCoordinates(point2);
-    
+
     return (coord1.latitude - coord2.latitude).abs() < tolerance &&
-           (coord1.longitude - coord2.longitude).abs() < tolerance;
+        (coord1.longitude - coord2.longitude).abs() < tolerance;
   }
 
   /// Validates that coordinate objects have valid lat/lng values
@@ -114,31 +111,11 @@ class CoordinateUtils {
     try {
       final coord = extractCoordinates(point);
       return coord.latitude >= -90.0 &&
-             coord.latitude <= 90.0 &&
-             coord.longitude >= -180.0 &&
-             coord.longitude <= 180.0;
+          coord.latitude <= 90.0 &&
+          coord.longitude >= -180.0 &&
+          coord.longitude <= 180.0;
     } catch (e) {
       return false;
     }
   }
 }
-
-/// Guidelines for Position vs Waypoint usage:
-/// 
-/// Use Position when:
-/// - Working with real-time location data from GPS
-/// - Need timestamp, accuracy, speed, heading information
-/// - Location tracking and simulation
-/// - Working with geolocator package
-/// 
-/// Use Waypoint when:
-/// - Defining route points (origin, destination, stops)
-/// - Static location references
-/// - API communication (cleaner serialization)
-/// - Route geometry representation
-/// - User-defined locations with names
-/// 
-/// Conversion rules:
-/// - API methods should primarily accept Waypoint objects for route definition
-/// - Internal tracking should use Position objects for real-time data
-/// - Always provide conversion methods for backward compatibility

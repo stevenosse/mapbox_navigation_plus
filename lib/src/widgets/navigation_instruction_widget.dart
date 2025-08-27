@@ -83,17 +83,13 @@ class NavigationInstructionWidget extends StatelessWidget {
       children: [
         // Maneuver icon
         Container(
-          width: 48,
-          height: 48,
-          margin: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: style.iconBackgroundColor,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          width: 56,
+          height: 56,
+          margin: const EdgeInsets.only(right: 16),
           child: Icon(
             ManeuverUtils.getManeuverIcon(currentStep!.maneuver),
             color: style.iconColor,
-            size: nav_constants.NavigationConstants.iconSize,
+            size: 36,
           ),
         ),
 
@@ -226,48 +222,50 @@ class NavigationInstructionStyle {
 
   factory NavigationInstructionStyle.defaultStyle() {
     return NavigationInstructionStyle(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+      margin: const EdgeInsets.only(top: 50, left: 0, right: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF4A90E2),
+            Color(0xFF357ABD),
+          ],
+        ),
       ),
       instructionTextStyle: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        height: 1.2,
       ),
       distanceTextStyle: const TextStyle(
-        fontSize: 14,
-        color: Colors.blue,
-        fontWeight: FontWeight.w500,
+        fontSize: 20,
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+        height: 1.2,
       ),
       nextStepTextStyle: const TextStyle(
-        fontSize: 12,
-        color: Colors.grey,
+        fontSize: 14,
+        color: Colors.white70,
+        fontWeight: FontWeight.w500,
       ),
       progressLabelStyle: const TextStyle(
-        fontSize: 10,
-        color: Colors.grey,
+        fontSize: 12,
+        color: Colors.white70,
         fontWeight: FontWeight.w500,
       ),
       progressValueStyle: const TextStyle(
-        fontSize: 14,
-        color: Colors.black87,
-        fontWeight: FontWeight.w600,
+        fontSize: 16,
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
       ),
       iconColor: Colors.white,
-      iconBackgroundColor: Colors.blue,
-      nextStepIconColor: Colors.grey,
-      progressBackgroundColor: Colors.grey.withValues(alpha: 0.1),
-      nextStepBackgroundColor: Colors.grey.withValues(alpha: 0.05),
+      iconBackgroundColor: Colors.transparent,
+      nextStepIconColor: Colors.white70,
+      progressBackgroundColor: Colors.black.withValues(alpha: 0.2),
+      nextStepBackgroundColor: Colors.black.withValues(alpha: 0.1),
     );
   }
 

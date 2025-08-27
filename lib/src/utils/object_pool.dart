@@ -118,7 +118,7 @@ class WaypointPool extends ObjectPool<Waypoint> {
     double? altitude,
   }) {
     acquire();
-    
+
     // Since Waypoint might be mutable, we can reuse it
     // If not, this will create a new one (check Waypoint implementation)
     return Waypoint(

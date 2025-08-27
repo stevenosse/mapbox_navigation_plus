@@ -33,15 +33,18 @@ class VoiceSettings {
     this.pitch = 1.0,
     this.volume = 1.0,
     this.language = 'en-US',
-    this.minimumInterval = 20000, // 20 seconds
+    this.minimumInterval = 20000,
     this.announcementDistances = const [800.0, 300.0, 100.0],
     this.announceArrival = true,
-    this.announceRouteRecalculation = true,
+    this.announceRouteRecalculation = false,
   });
 
   /// Creates default voice settings
   factory VoiceSettings.defaults({String? language}) {
-    return VoiceSettings(language: language ?? 'en-US');
+    return VoiceSettings(
+      language: language ?? 'en-US',
+      announceRouteRecalculation: false,
+    );
   }
 
   /// Creates voice settings optimized for highway driving
@@ -49,12 +52,9 @@ class VoiceSettings {
     return VoiceSettings(
       language: language ?? 'en-US',
       speechRate: 0.6,
-      announcementDistances: [
-        1000.0,
-        500.0,
-        200.0
-      ], // Earlier warnings for high speed
-      minimumInterval: 25000, // Longer intervals for highway
+      announcementDistances: [1000.0, 500.0, 200.0],
+      minimumInterval: 25000,
+      announceRouteRecalculation: false,
     );
   }
 
@@ -62,8 +62,9 @@ class VoiceSettings {
   factory VoiceSettings.city() {
     return const VoiceSettings(
       speechRate: 0.5,
-      announcementDistances: [400.0, 150.0], // Fewer city announcements
-      minimumInterval: 15000, // Less frequent updates in city
+      announcementDistances: [400.0, 150.0],
+      minimumInterval: 15000,
+      announceRouteRecalculation: false,
     );
   }
 
@@ -102,7 +103,7 @@ class VoiceSettings {
         pitch <= 2.0 &&
         volume >= 0.0 &&
         volume <= 1.0 &&
-        minimumInterval >= 5000 && // At least 5 seconds
+        minimumInterval >= 5000 &&
         announcementDistances.isNotEmpty &&
         announcementDistances.every((distance) => distance > 0);
   }

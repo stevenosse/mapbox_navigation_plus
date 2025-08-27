@@ -6,7 +6,7 @@ import '../models/waypoint.dart';
 class MathUtils {
   // Earth's radius in meters
   static const double earthRadiusMeters = 6371000.0;
-  
+
   // Mathematical constants
   static const double pi = 3.14159265359;
   static const double degreesToRadians = pi / 180.0;
@@ -14,17 +14,15 @@ class MathUtils {
   /// Calculates distance between two points using Haversine formula
   /// Returns distance in meters
   static double calculateDistance(
-    double lat1, 
-    double lon1, 
-    double lat2, 
-    double lon2
-  ) {
+      double lat1, double lon1, double lat2, double lon2) {
     final dLat = (lat2 - lat1) * degreesToRadians;
     final dLon = (lon2 - lon1) * degreesToRadians;
 
     final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1 * degreesToRadians) * cos(lat2 * degreesToRadians) *
-        sin(dLon / 2) * sin(dLon / 2);
+        cos(lat1 * degreesToRadians) *
+            cos(lat2 * degreesToRadians) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
 
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
@@ -32,39 +30,30 @@ class MathUtils {
   }
 
   /// Calculates distance between two Waypoint objects
-  static double calculateDistanceBetweenWaypoints(Waypoint point1, Waypoint point2) {
+  static double calculateDistanceBetweenWaypoints(
+      Waypoint point1, Waypoint point2) {
     return calculateDistance(
-      point1.latitude, 
-      point1.longitude,
-      point2.latitude, 
-      point2.longitude
-    );
+        point1.latitude, point1.longitude, point2.latitude, point2.longitude);
   }
 
   /// Calculates distance between two Position objects
-  static double calculateDistanceBetweenPositions(geo.Position pos1, geo.Position pos2) {
+  static double calculateDistanceBetweenPositions(
+      geo.Position pos1, geo.Position pos2) {
     return calculateDistance(
-      pos1.latitude, 
-      pos1.longitude,
-      pos2.latitude, 
-      pos2.longitude
-    );
+        pos1.latitude, pos1.longitude, pos2.latitude, pos2.longitude);
   }
 
   /// Calculates bearing between two points
   /// Returns bearing in degrees (0-360)
   static double calculateBearing(
-    double lat1, 
-    double lon1, 
-    double lat2, 
-    double lon2
-  ) {
+      double lat1, double lon1, double lat2, double lon2) {
     final dLon = (lon2 - lon1) * degreesToRadians;
     final lat1Rad = lat1 * degreesToRadians;
     final lat2Rad = lat2 * degreesToRadians;
 
     final y = sin(dLon) * cos(lat2Rad);
-    final x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
+    final x =
+        cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
 
     final bearingRad = atan2(y, x);
     final bearingDeg = bearingRad * 180.0 / pi;
@@ -75,21 +64,14 @@ class MathUtils {
   /// Calculates bearing between two Waypoint objects
   static double calculateBearingBetweenWaypoints(Waypoint from, Waypoint to) {
     return calculateBearing(
-      from.latitude, 
-      from.longitude,
-      to.latitude, 
-      to.longitude
-    );
+        from.latitude, from.longitude, to.latitude, to.longitude);
   }
 
   /// Calculates bearing between two Position objects
-  static double calculateBearingBetweenPositions(geo.Position from, geo.Position to) {
+  static double calculateBearingBetweenPositions(
+      geo.Position from, geo.Position to) {
     return calculateBearing(
-      from.latitude, 
-      from.longitude,
-      to.latitude, 
-      to.longitude
-    );
+        from.latitude, from.longitude, to.latitude, to.longitude);
   }
 
   /// Interpolates between two points at a given ratio (0.0 to 1.0)
@@ -121,7 +103,7 @@ class MathUtils {
       point2.longitude,
       ratio,
     );
-    
+
     return Waypoint(
       latitude: result.latitude,
       longitude: result.longitude,

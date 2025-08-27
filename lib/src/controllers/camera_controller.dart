@@ -9,8 +9,6 @@ import '../utils/constants.dart' as nav_constants;
 class CameraController {
   MapboxMap? _mapboxMap;
 
-  // Using shared constants from NavigationConstants
-
   // Current camera state
   double _currentZoom = nav_constants.NavigationConstants.defaultZoom;
   double _currentPitch = nav_constants.NavigationConstants.navigationPitch;

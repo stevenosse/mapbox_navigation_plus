@@ -28,9 +28,6 @@ class NavigationController {
   final CameraController _cameraController;
   final VoiceInstructionService? _voiceService;
 
-  final NavigationStartBuilder? _navigationStartBuilder;
-  final ArrivalAnnouncementBuilder? _arrivalAnnouncementBuilder;
-
   // Navigation state
   NavigationState _currentState = NavigationState.idle();
   RouteData? _currentRoute;
@@ -41,8 +38,6 @@ class NavigationController {
 
   // Voice settings
   VoiceSettings? _voiceSettings;
-
-  // Using shared constants from NavigationConstants
 
   // Stream controllers for state updates
   final StreamController<NavigationState> _stateController =
@@ -55,15 +50,12 @@ class NavigationController {
     required MapboxDirectionsAPI directionsAPI,
     required CameraController cameraController,
     VoiceInstructionService? voiceService,
-
     NavigationStartBuilder? navigationStartBuilder,
     ArrivalAnnouncementBuilder? arrivalAnnouncementBuilder,
   })  : _locationService = locationService,
         _directionsAPI = directionsAPI,
         _cameraController = cameraController,
-        _voiceService = voiceService,
-        _navigationStartBuilder = navigationStartBuilder,
-        _arrivalAnnouncementBuilder = arrivalAnnouncementBuilder;
+        _voiceService = voiceService;
 
   /// Current navigation state
   NavigationState get currentState => _currentState;
@@ -82,6 +74,9 @@ class NavigationController {
 
   /// Whether navigation has arrived at destination
   bool get hasArrived => _currentState.status == NavigationStatus.arrived;
+
+  /// Whether navigation is currently paused
+  bool get isPaused => _currentState.status == NavigationStatus.paused;
 
   /// Whether voice instructions are enabled
   bool get isVoiceEnabled => _voiceService?.isEnabled ?? false;
@@ -112,11 +107,6 @@ class NavigationController {
     }
   }
 
-  /// Test method to check if voice instructions are working
-  Future<void> testVoiceAnnouncement([String? message]) async {
-    await _voiceService?.testAnnouncement(message);
-  }
-
   /// Check TTS availability and configuration (for debugging)
   Future<Map<String, dynamic>?> checkVoiceTTSAvailability() async {
     return await _voiceService?.checkTTSAvailability();
@@ -145,12 +135,10 @@ class NavigationController {
 
     await ErrorHandler.safeExecute(
       () async {
-        // Update state to calculating
         _updateState(NavigationState.calculating());
 
-        // Get route from Mapbox Directions API with traffic data if requested
         final useTrafficData = enableTrafficData ?? enableTrafficDataByDefault;
-        final route = await _directionsAPI.getRouteFromWaypoints(
+        final route = await _directionsAPI.getRoute(
           origin: origin,
           destination: destination,
           waypoints: stops,
@@ -174,18 +162,10 @@ class NavigationController {
 
         // Announce navigation start with localized text
         if (_voiceService != null && _voiceService!.isEnabled) {
-          if (_navigationStartBuilder != null) {
-            final localizedAnnouncement = _navigationStartBuilder!(
-              destinationName: destination.name,
-              totalDistance: route.totalDistance,
-            );
-            await _voiceService!.testAnnouncement(localizedAnnouncement);
-          } else {
-            await _voiceService!.announceNavigationStart(
-              destinationName: destination.name,
-              totalDistance: route.totalDistance,
-            );
-          }
+          await _voiceService!.announceNavigationStart(
+            destinationName: destination.name,
+            totalDistance: route.totalDistance,
+          );
         }
 
         // Update state to navigating
@@ -209,21 +189,20 @@ class NavigationController {
     );
   }
 
-  /// Starts navigation from origin to destination using Position objects (backward compatibility)
-  Future<void> startNavigationFromPositions({
-    required geo.Position origin,
-    required geo.Position destination,
-    List<geo.Position>? waypoints,
-    String profile = 'driving',
-    bool? enableTrafficData,
-  }) async {
-    return startNavigation(
-      origin: Waypoint.fromPosition(origin),
-      destination: Waypoint.fromPosition(destination),
-      stops: waypoints?.map((pos) => Waypoint.fromPosition(pos)).toList(),
-      profile: profile,
-      enableTrafficData: enableTrafficData,
-    );
+  /// Pauses navigation (stops location tracking but keeps route)
+  Future<void> pauseNavigation() async {
+    if (_currentState.status != NavigationStatus.navigating) return;
+
+    await _stopLocationTracking();
+    _updateState(_currentState.copyWith(status: NavigationStatus.paused));
+  }
+
+  /// Resumes navigation from paused state
+  Future<void> resumeNavigation() async {
+    if (_currentState.status != NavigationStatus.paused) return;
+
+    await _startLocationTracking();
+    _updateState(_currentState.copyWith(status: NavigationStatus.navigating));
   }
 
   /// Stops navigation and cleans up resources
@@ -279,11 +258,38 @@ class NavigationController {
     ));
   }
 
-  /// Recalculates route from current position to destination
+  /// Updates route visualization without recalculating (silent progress update)
+  Future<void> updateRouteVisualization({
+    required geo.Position currentPosition,
+    int? currentStepIndex,
+  }) async {
+    if (_currentRoute == null) return;
+
+    try {
+      // Update camera position for smooth tracking
+      await _cameraController.updateCamera(
+        userPosition: currentPosition,
+        userBearing:
+            currentPosition.heading >= 0 ? currentPosition.heading : null,
+        route: _currentRoute,
+      );
+
+      // Update navigation state without changing route
+      _updateState(NavigationState.navigating(
+        route: _currentRoute!,
+        currentPosition: Waypoint.fromPosition(currentPosition),
+      ));
+    } catch (e) {
+      // Silently handle visualization update errors
+    }
+  }
+
+  /// Recalculates route from current position to destination (silent by default)
   Future<void> recalculateRoute({
     geo.Position? currentPosition,
     String profile = 'driving',
     bool? enableTrafficData,
+    bool announceRecalculation = false,
   }) async {
     if (_currentRoute == null) return;
 
@@ -297,7 +303,7 @@ class NavigationController {
       ));
 
       final useTrafficData = enableTrafficData ?? enableTrafficDataByDefault;
-      final newRoute = await _directionsAPI.getRouteFromWaypoints(
+      final newRoute = await _directionsAPI.getRoute(
         origin: Waypoint.fromPosition(position),
         destination: _currentRoute!.destination,
         profile: profile,
@@ -306,8 +312,10 @@ class NavigationController {
 
       _currentRoute = newRoute;
 
-      // Announce route recalculation
-      await _voiceService?.announceRouteRecalculation();
+      // Only announce route recalculation if explicitly requested
+      if (announceRecalculation) {
+        await _voiceService?.announceRouteRecalculation();
+      }
 
       _updateState(NavigationState.navigating(
         route: newRoute,
@@ -328,7 +336,7 @@ class NavigationController {
   /// Automatically recalculates route if traffic conditions have significantly changed
   Future<bool> checkAndRecalculateForTraffic({
     geo.Position? currentPosition,
-    double timeSavingsThreshold = 300.0, // 5 minutes
+    double timeSavingsThreshold = 300.0,
   }) async {
     if (_currentRoute == null || !_currentRoute!.hasTrafficData) {
       return false;
@@ -355,6 +363,7 @@ class NavigationController {
           currentPosition: position,
           profile: 'driving-traffic',
           enableTrafficData: true,
+          announceRecalculation: false,
         );
         return true;
       }
@@ -403,15 +412,9 @@ class NavigationController {
           nav_constants.NavigationConstants.arrivalThreshold) {
         // Announce arrival with localized text
         if (_voiceService != null && _voiceService!.isEnabled) {
-          if (_arrivalAnnouncementBuilder != null) {
-            final localizedAnnouncement = _arrivalAnnouncementBuilder!(
-              destinationName: route.destination.name,
-            );
-            await _voiceService!.testAnnouncement(localizedAnnouncement);
-          } else {
-            await _voiceService!
-                .announceArrival(destinationName: route.destination.name);
-          }
+          await _voiceService!.announceArrival(
+            destinationName: route.destination.name,
+          );
         }
 
         _updateState(
@@ -511,18 +514,17 @@ class NavigationController {
     ));
   }
 
-  /// Updates navigation progress and state
+  /// Updates navigation progress and state (no route recalculation)
   void _updateNavigationProgress(geo.Position position) {
     if (_currentRoute == null) return;
 
-    final route = _currentRoute!;
-
+    // Only update navigation state - visualization is handled by MapboxNavigationView
     _updateState(NavigationState.navigating(
-      route: route,
+      route: _currentRoute!,
       currentPosition: Waypoint.fromPosition(position),
     ));
 
-    // Update camera position
+    // Update camera position for smooth tracking
     _cameraController.updateCamera(
       userPosition: position,
       userBearing: position.heading >= 0 ? position.heading : null,
@@ -540,7 +542,7 @@ class NavigationController {
   Future<void> dispose() async {
     await _stopLocationTracking();
     await _voiceService?.dispose();
-    
+
     // Close stream controllers if not already closed
     if (!_stateController.isClosed) {
       await _stateController.close();

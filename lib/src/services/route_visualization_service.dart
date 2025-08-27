@@ -17,7 +17,7 @@ class RouteVisualizationService {
   MapboxMap? _mapboxMap;
   RouteData? _currentRoute;
   bool _isInitialized = false;
-  
+
   // Cache for optimization
   Map<String, dynamic>? _cachedFullRouteGeoJson;
   int? _lastStepIndex;
@@ -46,7 +46,7 @@ class RouteVisualizationService {
       if (isNewRoute || _cachedFullRouteGeoJson == null) {
         final routeGeoJsonString = RouteUtils.routeToGeoJson(route);
         _cachedFullRouteGeoJson = json.decode(routeGeoJsonString);
-        
+
         // Update the full route source (for traveled portion)
         await _mapboxMap!.style.setStyleSourceProperty(
           _routeSourceId,
@@ -67,28 +67,33 @@ class RouteVisualizationService {
 
   /// Updates route progress during navigation
   Future<void> updateRouteProgress(RouteData route, int currentStepIndex,
-      {geo.Position? currentPosition}) async {
+      {geo.Position? currentPosition, bool forceUpdate = false}) async {
     if (!_isInitialized || _mapboxMap == null) return;
 
     try {
-      await _updateRemainingRoute(route, currentStepIndex, currentPosition);
+      await _updateRemainingRoute(route, currentStepIndex, currentPosition,
+          forceUpdate: forceUpdate);
     } catch (e) {
       throw RouteVisualizationException('Failed to update route progress: $e');
     }
   }
 
   /// Helper method to update remaining route with caching
-  Future<void> _updateRemainingRoute(RouteData route, int? currentStepIndex,
-      geo.Position? currentPosition) async {
+  Future<void> _updateRemainingRoute(
+      RouteData route, int? currentStepIndex, geo.Position? currentPosition,
+      {bool forceUpdate = false}) async {
     // Skip update if step hasn't changed and position is close to last cached position
-    if (_shouldSkipRemainingRouteUpdate(currentStepIndex, currentPosition)) {
+    if (!forceUpdate &&
+        _shouldSkipRemainingRouteUpdate(currentStepIndex, currentPosition)) {
       return;
     }
 
-    final remainingRouteGeoJson = _createRemainingRouteGeoJson(
-        route, currentStepIndex, currentPosition);
+    final remainingRouteGeoJson =
+        _createRemainingRouteGeoJson(route, currentStepIndex, currentPosition);
 
     _lastStepIndex = currentStepIndex;
+    _lastUpdatePosition = currentPosition;
+    _lastUpdateTime = DateTime.now();
 
     await _mapboxMap!.style.setStyleSourceProperty(
       '$_routeSourceId-remaining',
@@ -97,16 +102,44 @@ class RouteVisualizationService {
     );
   }
 
+  // Performance optimization - track last update position
+  geo.Position? _lastUpdatePosition;
+  DateTime? _lastUpdateTime;
+
   /// Determines if remaining route update can be skipped
-  bool _shouldSkipRemainingRouteUpdate(int? currentStepIndex, geo.Position? currentPosition) {
+  bool _shouldSkipRemainingRouteUpdate(
+      int? currentStepIndex, geo.Position? currentPosition) {
     // Always update if no cache or step changed significantly
     if (_lastStepIndex == null || currentStepIndex != _lastStepIndex) {
       return false;
     }
 
-    // For now, don't skip - in a more advanced implementation,
-    // we could check if the position moved less than a threshold
-    return false;
+    // Skip if not enough time has passed (throttle updates for performance)
+    final now = DateTime.now();
+    if (_lastUpdateTime != null) {
+      final timeDiff = now.difference(_lastUpdateTime!).inMilliseconds;
+      if (timeDiff <
+          nav_constants.RouteVisualizationConstants.routeUpdateIntervalMs) {
+        return true; // Skip this update
+      }
+    }
+
+    // Skip if position hasn't moved significantly (avoid redundant updates)
+    if (currentPosition != null && _lastUpdatePosition != null) {
+      final distance = MathUtils.calculateDistance(
+        _lastUpdatePosition!.latitude,
+        _lastUpdatePosition!.longitude,
+        currentPosition.latitude,
+        currentPosition.longitude,
+      );
+
+      // Skip update if moved less than 0.5 meters (very sensitive for ultra-smooth tracing)
+      if (distance < 0.5) {
+        return true;
+      }
+    }
+
+    return false; // Proceed with update
   }
 
   /// Creates GeoJSON for the remaining portion of the route
@@ -143,12 +176,18 @@ class RouteVisualizationService {
       return {'type': 'FeatureCollection', 'features': []};
     }
 
-    final coordinates = remainingGeometry
-        .map((waypoint) => [
-              waypoint.longitude,
-              waypoint.latitude,
-            ])
-        .toList();
+    // Start coordinates with current position for perfect alignment with user puck
+    final coordinates = <List<double>>[];
+
+    // Insert user's current position as the first point for perfect alignment
+    if (currentPosition != null) {
+      coordinates.add([currentPosition.longitude, currentPosition.latitude]);
+    }
+
+    // Add remaining route geometry
+    coordinates.addAll(remainingGeometry
+        .map((waypoint) => [waypoint.longitude, waypoint.latitude])
+        .toList());
 
     return {
       'type': 'FeatureCollection',
@@ -193,7 +232,6 @@ class RouteVisualizationService {
 
     return closestIndex;
   }
-
 
   /// Clears the current route from the map
   Future<void> clearRoute() async {
@@ -261,23 +299,26 @@ class RouteVisualizationService {
           sourceId: _routeSourceId,
           lineColor:
               nav_constants.RouteVisualizationConstants.routeTraveledColor,
-          lineWidth: 5.0,
+          lineWidth:
+              nav_constants.RouteVisualizationConstants.routeTraveledWidth,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
-          lineOpacity: 0.6,
+          lineOpacity: 0.7,
         ),
       );
 
-      // 3. Remaining route (bright blue)
+      // 3. Remaining route (bright blue, thick like production apps)
       await _mapboxMap!.style.addLayer(
         LineLayer(
           id: _routeLayerId,
           sourceId: '$_routeSourceId-remaining',
           lineColor:
               nav_constants.RouteVisualizationConstants.routeDefaultColor,
-          lineWidth: 5.0,
+          lineWidth:
+              nav_constants.RouteVisualizationConstants.routeRemainingWidth,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
+          lineOpacity: nav_constants.RouteVisualizationConstants.routeOpacity,
         ),
       );
 
@@ -447,16 +488,17 @@ class RouteVisualizationService {
     // Simple hash based on route geometry and traffic data
     final buffer = StringBuffer();
     buffer.write('${route.totalDistance}_${route.totalDuration}');
-    
+
     // Add first few and last few geometry points
     if (route.geometry.isNotEmpty) {
       final geometryToHash = [
         ...route.geometry.take(3),
         ...route.geometry.skip(max(0, route.geometry.length - 3)),
       ];
-      
+
       for (final point in geometryToHash) {
-        buffer.write('_${point.latitude.toStringAsFixed(6)}_${point.longitude.toStringAsFixed(6)}');
+        buffer.write(
+            '_${point.latitude.toStringAsFixed(6)}_${point.longitude.toStringAsFixed(6)}');
       }
     }
 

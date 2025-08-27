@@ -195,7 +195,7 @@ class NavigationState {
       route!.destination.longitude,
     );
 
-    return distanceToDestination < 20.0; // Within 20 meters
+    return distanceToDestination < 20.0;
   }
 
   /// Checks if the current step should be advanced
@@ -209,7 +209,7 @@ class NavigationState {
       currentStep!.endLocation.longitude,
     );
 
-    return distanceToStepEnd < 30.0; // Within 30 meters of step end
+    return distanceToStepEnd < 30.0;
   }
 
   /// Creates a copy of this state with updated properties
