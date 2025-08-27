@@ -5,25 +5,25 @@ import 'package:geolocator/geolocator.dart' as geo;
 class Waypoint {
   /// The latitude coordinate in decimal degrees
   final double latitude;
-  
+
   /// The longitude coordinate in decimal degrees
   final double longitude;
-  
+
   /// Optional altitude in meters above sea level
   final double? altitude;
-  
+
   /// Optional accuracy of the position in meters
   final double? accuracy;
-  
+
   /// Optional heading in degrees (0-360, where 0 is north)
   final double? heading;
-  
+
   /// Optional speed in meters per second
   final double? speed;
-  
+
   /// Optional timestamp when this waypoint was recorded
   final DateTime? timestamp;
-  
+
   /// Optional name or description for this waypoint
   final String? name;
 
@@ -73,11 +73,15 @@ class Waypoint {
     return Waypoint(
       latitude: (map['latitude'] as num).toDouble(),
       longitude: (map['longitude'] as num).toDouble(),
-      altitude: map['altitude'] != null ? (map['altitude'] as num).toDouble() : null,
-      accuracy: map['accuracy'] != null ? (map['accuracy'] as num).toDouble() : null,
-      heading: map['heading'] != null ? (map['heading'] as num).toDouble() : null,
+      altitude:
+          map['altitude'] != null ? (map['altitude'] as num).toDouble() : null,
+      accuracy:
+          map['accuracy'] != null ? (map['accuracy'] as num).toDouble() : null,
+      heading:
+          map['heading'] != null ? (map['heading'] as num).toDouble() : null,
       speed: map['speed'] != null ? (map['speed'] as num).toDouble() : null,
-      timestamp: map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
+      timestamp:
+          map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
       name: map['name'],
     );
   }
@@ -161,7 +165,8 @@ class Waypoint {
   }
 
   /// Returns a formatted string representation of the coordinates
-  String get coordinatesString => '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+  String get coordinatesString =>
+      '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
 
   @override
   bool operator ==(Object other) {
@@ -196,7 +201,8 @@ class Waypoint {
     final buffer = StringBuffer('Waypoint(');
     buffer.write('lat: ${latitude.toStringAsFixed(6)}, ');
     buffer.write('lng: ${longitude.toStringAsFixed(6)}');
-    if (altitude != null) buffer.write(', alt: ${altitude!.toStringAsFixed(1)}m');
+    if (altitude != null)
+      buffer.write(', alt: ${altitude!.toStringAsFixed(1)}m');
     if (name != null) buffer.write(', name: "$name"');
     buffer.write(')');
     return buffer.toString();
@@ -218,7 +224,8 @@ extension WaypointListExtensions on List<Waypoint> {
   /// Finds the waypoint closest to a given position
   Waypoint? closestTo(Waypoint target) {
     if (isEmpty) return null;
-    return reduce((a, b) => a.distanceTo(target) < b.distanceTo(target) ? a : b);
+    return reduce(
+        (a, b) => a.distanceTo(target) < b.distanceTo(target) ? a : b);
   }
 
   /// Converts all waypoints to Position objects

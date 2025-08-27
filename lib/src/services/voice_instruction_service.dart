@@ -26,8 +26,10 @@ class VoiceInstructionService {
   final Map<String, Set<double>> _announcedDistances = {};
 
   // Streams for voice events
-  final StreamController<String> _instructionController = StreamController<String>.broadcast();
-  final StreamController<VoiceInstructionError> _errorController = StreamController<VoiceInstructionError>.broadcast();
+  final StreamController<String> _instructionController =
+      StreamController<String>.broadcast();
+  final StreamController<VoiceInstructionError> _errorController =
+      StreamController<VoiceInstructionError>.broadcast();
 
   /// Stream of spoken instructions
   Stream<String> get instructionStream => _instructionController.stream;
@@ -155,7 +157,8 @@ class VoiceInstructionService {
       return;
     }
 
-    final distance = remainingDistance ?? step.getRemainingDistance(currentPosition);
+    final distance =
+        remainingDistance ?? step.getRemainingDistance(currentPosition);
     final stepId = _getStepId(step);
 
     // Check if we should announce at this distance
@@ -225,7 +228,8 @@ class VoiceInstructionService {
     await _queueInstruction(_VoiceInstruction(
       text: instruction,
       priority: nav_constants.VoiceConstants.priorityNormal,
-      instructionType: nav_constants.VoiceConstants.instructionTypeRecalculation,
+      instructionType:
+          nav_constants.VoiceConstants.instructionTypeRecalculation,
     ));
   }
 
@@ -268,7 +272,8 @@ class VoiceInstructionService {
         }
 
         // Check if current language is supported
-        final isLanguageAvailable = await _tts!.isLanguageAvailable(_settings.language);
+        final isLanguageAvailable =
+            await _tts!.isLanguageAvailable(_settings.language);
         result['isLanguageAvailable'] = isLanguageAvailable;
       } catch (e) {
         result['error'] = e.toString();
@@ -286,7 +291,8 @@ class VoiceInstructionService {
 
     // Check minimum interval between instructions
     if (_lastInstructionTime != null) {
-      final timeSinceLastInstruction = DateTime.now().difference(_lastInstructionTime!);
+      final timeSinceLastInstruction =
+          DateTime.now().difference(_lastInstructionTime!);
       if (timeSinceLastInstruction.inMilliseconds < _settings.minimumInterval &&
           instruction.priority < nav_constants.VoiceConstants.priorityUrgent) {
         return;
@@ -397,7 +403,8 @@ class VoiceInstructionService {
   /// Cleans up announced distances for completed steps
   void cleanupCompletedSteps(List<NavigationStep> currentSteps) {
     final currentStepIds = currentSteps.map((step) => _getStepId(step)).toSet();
-    _announcedDistances.removeWhere((stepId, _) => !currentStepIds.contains(stepId));
+    _announcedDistances
+        .removeWhere((stepId, _) => !currentStepIds.contains(stepId));
   }
 
   /// Disposes the service and cleans up resources

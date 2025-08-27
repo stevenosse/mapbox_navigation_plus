@@ -9,7 +9,7 @@ import '../utils/error_handling.dart';
 /// Service for interacting with Mapbox Directions API
 class MapboxDirectionsAPI {
   // Using shared constants from NavigationConstants
-  
+
   final String _accessToken;
   final http.Client _httpClient;
   final String _language;
@@ -18,14 +18,14 @@ class MapboxDirectionsAPI {
     required String accessToken,
     http.Client? httpClient,
     String language = 'en',
-  }) : _accessToken = accessToken,
-       _httpClient = httpClient ?? http.Client(),
-       _language = language {
+  })  : _accessToken = accessToken,
+        _httpClient = httpClient ?? http.Client(),
+        _language = language {
     ErrorHandler.validateMapboxToken(_accessToken);
   }
 
   /// Fetches a route from origin to destination using Waypoint objects
-  /// 
+  ///
   /// [profile] can be 'driving', 'walking', 'cycling', 'driving-traffic'
   /// [waypoints] optional intermediate points along the route
   /// [alternatives] whether to return alternative routes
@@ -59,7 +59,7 @@ class MapboxDirectionsAPI {
   }
 
   /// Fetches a route from origin to destination using Position objects (backward compatibility)
-  /// 
+  ///
   /// [profile] can be 'driving', 'walking', 'cycling', 'driving-traffic'
   /// [waypoints] optional intermediate points along the route
   /// [alternatives] whether to return alternative routes
@@ -81,27 +81,27 @@ class MapboxDirectionsAPI {
     try {
       // Build coordinates string
       final coordinates = <String>[];
-      
+
       // Add origin
       coordinates.add('${origin.longitude},${origin.latitude}');
-      
+
       // Add waypoints if provided
       if (waypoints != null) {
         for (final waypoint in waypoints) {
           coordinates.add('${waypoint.longitude},${waypoint.latitude}');
         }
       }
-      
+
       // Add destination
       coordinates.add('${destination.longitude},${destination.latitude}');
-      
+
       final coordinatesString = coordinates.join(';');
-      
+
       // Automatically use driving-traffic profile if traffic data is requested
       if (includeTrafficData && profile == 'driving') {
         profile = 'driving-traffic';
       }
-      
+
       // Build query parameters
       final queryParams = {
         'access_token': _accessToken,
@@ -111,25 +111,27 @@ class MapboxDirectionsAPI {
         'overview': overview ? 'full' : 'simplified',
         'language': language ?? _language,
       };
-      
+
       // Add traffic annotations if requested and profile supports it
       if (includeTrafficData && profile.contains('traffic')) {
-        queryParams['annotations'] = 'congestion,congestion_numeric,speed,distance,duration';
+        queryParams['annotations'] =
+            'congestion,congestion_numeric,speed,distance,duration';
       }
-      
+
       // Build URL
-      final uri = Uri.parse('${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
+      final uri = Uri.parse(
+              '${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
           .replace(queryParameters: queryParams);
-      
+
       // Make HTTP request
       final response = await _httpClient.get(uri);
-      
+
       if (response.statusCode != 200) {
         throw RouteException.apiError(response.statusCode, response.body);
       }
-      
+
       final data = json.decode(response.body) as Map<String, dynamic>;
-      
+
       // Check for API errors
       if (data['code'] != 'Ok') {
         throw RouteException.apiError(
@@ -137,7 +139,7 @@ class MapboxDirectionsAPI {
           data['message'] as String? ?? 'Unknown API error',
         );
       }
-      
+
       final routes = data['routes'] as List<dynamic>;
       if (routes.isEmpty) {
         throw const MapboxDirectionsException(
@@ -145,10 +147,10 @@ class MapboxDirectionsAPI {
           404,
         );
       }
-      
+
       // Use the first (best) route
       final route = routes.first as Map<String, dynamic>;
-      
+
       return RouteData.fromMapboxResponseWithPositions(
         route,
         origin,
@@ -156,7 +158,6 @@ class MapboxDirectionsAPI {
         waypoints: waypoints,
         profile: profile,
       );
-      
     } catch (e) {
       if (e is RouteException) {
         rethrow;
@@ -199,24 +200,24 @@ class MapboxDirectionsAPI {
     try {
       // Build coordinates string
       final coordinates = <String>[];
-      
+
       coordinates.add('${origin.longitude},${origin.latitude}');
-      
+
       if (waypoints != null) {
         for (final waypoint in waypoints) {
           coordinates.add('${waypoint.longitude},${waypoint.latitude}');
         }
       }
-      
+
       coordinates.add('${destination.longitude},${destination.latitude}');
-      
+
       final coordinatesString = coordinates.join(';');
-      
+
       // Automatically use driving-traffic profile if traffic data is requested
       if (includeTrafficData && profile == 'driving') {
         profile = 'driving-traffic';
       }
-      
+
       // Build query parameters
       final queryParams = {
         'access_token': _accessToken,
@@ -227,40 +228,43 @@ class MapboxDirectionsAPI {
         'language': language ?? _language,
         'alternative_count': maxAlternatives.toString(),
       };
-      
+
       // Add traffic annotations if requested and profile supports it
       if (includeTrafficData && profile.contains('traffic')) {
-        queryParams['annotations'] = 'congestion,congestion_numeric,speed,distance,duration';
+        queryParams['annotations'] =
+            'congestion,congestion_numeric,speed,distance,duration';
       }
-      
-      final uri = Uri.parse('${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
+
+      final uri = Uri.parse(
+              '${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
           .replace(queryParameters: queryParams);
-      
+
       final response = await _httpClient.get(uri);
-      
+
       if (response.statusCode != 200) {
         throw RouteException.apiError(response.statusCode, response.body);
       }
-      
+
       final data = json.decode(response.body) as Map<String, dynamic>;
-      
+
       if (data['code'] != 'Ok') {
         throw RouteException.apiError(
           response.statusCode,
           data['message'] as String? ?? 'Unknown API error',
         );
       }
-      
+
       final routes = data['routes'] as List<dynamic>;
-      
-      return routes.map((route) => RouteData.fromMapboxResponseWithPositions(
-        route as Map<String, dynamic>,
-        origin,
-        destination,
-        waypoints: waypoints,
-        profile: profile,
-      )).toList();
-      
+
+      return routes
+          .map((route) => RouteData.fromMapboxResponseWithPositions(
+                route as Map<String, dynamic>,
+                origin,
+                destination,
+                waypoints: waypoints,
+                profile: profile,
+              ))
+          .toList();
     } catch (e) {
       if (e is RouteException) {
         rethrow;
@@ -285,7 +289,7 @@ class MapboxDirectionsAPI {
         overview: false,
         includeTrafficData: includeTrafficData,
       );
-      
+
       return route.totalDuration;
     } catch (e) {
       if (e is RouteException) rethrow;

@@ -14,13 +14,16 @@ class LocalizedVoiceService {
   LocalizedVoiceService(this._voiceService, this._context);
 
   /// Gets localized voice instructions
-  NavigationLocalizations get _localizations => NavigationLocalizations.of(_context);
+  NavigationLocalizations get _localizations =>
+      NavigationLocalizations.of(_context);
 
   /// Initialize the voice service
-  Future<bool> initialize([VoiceSettings? settings]) => _voiceService.initialize(settings);
+  Future<bool> initialize([VoiceSettings? settings]) =>
+      _voiceService.initialize(settings);
 
   /// Update voice settings
-  Future<void> updateSettings(VoiceSettings newSettings) => _voiceService.updateSettings(newSettings);
+  Future<void> updateSettings(VoiceSettings newSettings) =>
+      _voiceService.updateSettings(newSettings);
 
   /// Stream of spoken instructions
   Stream<String> get instructionStream => _voiceService.instructionStream;
@@ -45,7 +48,8 @@ class LocalizedVoiceService {
   }) async {
     if (!isEnabled) return;
 
-    final distance = remainingDistance ?? step.getRemainingDistance(currentPosition);
+    final distance =
+        remainingDistance ?? step.getRemainingDistance(currentPosition);
 
     // Create localized voice instruction
     final instruction = VoiceUtils.createVoiceInstruction(
@@ -119,7 +123,8 @@ class LocalizedVoiceService {
   }
 
   /// Check TTS availability
-  Future<Map<String, dynamic>> checkTTSAvailability() => _voiceService.checkTTSAvailability();
+  Future<Map<String, dynamic>> checkTTSAvailability() =>
+      _voiceService.checkTTSAvailability();
 
   /// Dispose the service
   Future<void> dispose() => _voiceService.dispose();

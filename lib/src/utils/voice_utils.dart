@@ -3,21 +3,21 @@ class VoiceUtils {
   /// Cleans and optimizes text for text-to-speech
   static String cleanTextForTTS(String text) {
     if (text.isEmpty) return text;
-    
+
     String cleanedText = text;
-    
+
     // Remove special characters and clean up
     cleanedText = cleanedText.replaceAll(RegExp(r'[^\w\s\.,!?-]'), ' ');
-    
+
     // Expand common abbreviations for better pronunciation
     cleanedText = _expandAbbreviations(cleanedText);
-    
+
     // Clean up multiple spaces
     cleanedText = cleanedText.replaceAll(RegExp(r'\s+'), ' ');
-    
+
     // Trim whitespace
     cleanedText = cleanedText.trim();
-    
+
     return cleanedText;
   }
 
@@ -26,14 +26,14 @@ class VoiceUtils {
     final expansions = {
       // Directions
       r'\bN\b': 'North',
-      r'\bS\b': 'South', 
+      r'\bS\b': 'South',
       r'\bE\b': 'East',
       r'\bW\b': 'West',
       r'\bNE\b': 'Northeast',
       r'\bNW\b': 'Northwest',
       r'\bSE\b': 'Southeast',
       r'\bSW\b': 'Southwest',
-      
+
       // Road types
       r'\bSt\.?\b': 'Street',
       r'\bAve\.?\b': 'Avenue',
@@ -46,7 +46,7 @@ class VoiceUtils {
       r'\bPkwy\.?\b': 'Parkway',
       r'\bHwy\.?\b': 'Highway',
       r'\bFwy\.?\b': 'Freeway',
-      
+
       // Common terms
       r'\bft\.?\b': 'feet',
       r'\bmi\.?\b': 'miles',
@@ -54,19 +54,20 @@ class VoiceUtils {
       r'\bm\.?\b': 'meters',
       r'\bmph\.?\b': 'miles per hour',
       r'\bkph\.?\b': 'kilometers per hour',
-      
+
       // Numbers with ordinals for exits
       r'\b1st\b': 'first',
-      r'\b2nd\b': 'second', 
+      r'\b2nd\b': 'second',
       r'\b3rd\b': 'third',
       r'\b(\d+)th\b': r'\1th',
     };
-    
+
     String result = text;
     expansions.forEach((pattern, replacement) {
-      result = result.replaceAll(RegExp(pattern, caseSensitive: false), replacement);
+      result =
+          result.replaceAll(RegExp(pattern, caseSensitive: false), replacement);
     });
-    
+
     return result;
   }
 
@@ -91,11 +92,11 @@ class VoiceUtils {
     String inDistance = 'In',
   }) {
     final cleanInstruction = cleanTextForTTS(baseInstruction);
-    
+
     // For very close distances (under 50m), make it urgent and simple
     if (remainingDistance <= 50) {
       return _createUrgentInstruction(
-        cleanInstruction, 
+        cleanInstruction,
         maneuverType,
         turnLeftNow: turnLeftNow,
         turnRightNow: turnRightNow,
@@ -104,11 +105,11 @@ class VoiceUtils {
         enterRoundabout: enterRoundabout,
       );
     }
-    
+
     // For medium distances (50m-200m), add preparation context
     if (remainingDistance <= 200) {
       return _createPreparationInstruction(
-        cleanInstruction, 
+        cleanInstruction,
         maneuverType,
         prepareToTurnLeft: prepareToTurnLeft,
         prepareToTurnRight: prepareToTurnRight,
@@ -118,18 +119,20 @@ class VoiceUtils {
         prepareTo: prepareTo,
       );
     }
-    
+
     // For longer distances, provide advance notice with distance
     return _createAdvanceInstruction(
-      cleanInstruction, 
-      remainingDistance, 
+      cleanInstruction,
+      remainingDistance,
       maneuverType,
       inDistance: inDistance,
     );
   }
 
   /// Creates urgent instruction for immediate actions
-  static String _createUrgentInstruction(String instruction, String? maneuverType, {
+  static String _createUrgentInstruction(
+    String instruction,
+    String? maneuverType, {
     String turnLeftNow = 'Turn left now',
     String turnRightNow = 'Turn right now',
     String mergeNow = 'Merge now',
@@ -137,7 +140,7 @@ class VoiceUtils {
     String enterRoundabout = 'Enter the roundabout',
   }) {
     final lowerInstruction = instruction.toLowerCase();
-    
+
     if (maneuverType != null) {
       switch (maneuverType.toLowerCase()) {
         case 'turn':
@@ -156,17 +159,19 @@ class VoiceUtils {
           return enterRoundabout;
       }
     }
-    
+
     // Fallback to processed instruction with urgency
     if (lowerInstruction.contains('turn')) {
       return '${instruction.replaceAll(RegExp(r'^turn', caseSensitive: false), 'Turn')} now';
     }
-    
+
     return instruction;
   }
 
   /// Creates preparation instruction for upcoming maneuvers
-  static String _createPreparationInstruction(String instruction, String? maneuverType, {
+  static String _createPreparationInstruction(
+    String instruction,
+    String? maneuverType, {
     String prepareToTurnLeft = 'Prepare to turn left',
     String prepareToTurnRight = 'Prepare to turn right',
     String prepareToMerge = 'Prepare to merge',
@@ -175,7 +180,7 @@ class VoiceUtils {
     String prepareTo = 'Prepare to',
   }) {
     final lowerInstruction = instruction.toLowerCase();
-    
+
     if (maneuverType != null) {
       switch (maneuverType.toLowerCase()) {
         case 'turn':
@@ -194,21 +199,24 @@ class VoiceUtils {
           return prepareToEnterRoundabout;
       }
     }
-    
+
     // Add "prepare to" prefix if not already present
     if (!lowerInstruction.contains('prepare')) {
       return '$prepareTo $instruction';
     }
-    
+
     return instruction;
   }
 
   /// Creates advance instruction with distance context
-  static String _createAdvanceInstruction(String instruction, double remainingDistance, String? maneuverType, {
+  static String _createAdvanceInstruction(
+    String instruction,
+    double remainingDistance,
+    String? maneuverType, {
     String inDistance = 'In',
   }) {
     final distanceText = _formatDistanceForVoice(remainingDistance);
-    
+
     // Create natural sounding advance instruction
     return '$inDistance $distanceText, $instruction';
   }
@@ -253,21 +261,20 @@ class VoiceUtils {
 
   /// Creates navigation start announcement
   static String createNavigationStartAnnouncement({
-    String? destinationName, 
+    String? destinationName,
     double? totalDistance,
     String navigationStarting = 'Starting navigation',
     String totalDistanceLabel = 'Total distance',
     String yourDestination = 'your destination',
   }) {
-    final destination = destinationName?.isNotEmpty == true 
-        ? destinationName 
-        : yourDestination;
-    
+    final destination =
+        destinationName?.isNotEmpty == true ? destinationName : yourDestination;
+
     if (totalDistance != null) {
       final distanceText = _formatDistanceForVoice(totalDistance);
       return '$navigationStarting to $destination. $totalDistanceLabel: $distanceText';
     }
-    
+
     print('$navigationStarting to $destination');
     return '$navigationStarting to $destination';
   }
@@ -275,29 +282,29 @@ class VoiceUtils {
   /// Validates if text is suitable for TTS
   static bool isValidForTTS(String text) {
     if (text.isEmpty || text.trim().isEmpty) return false;
-    
+
     // Check for excessively long text (TTS systems have limits)
     if (text.length > 200) return false;
-    
+
     // Check for mostly non-alphabetic content
     final alphaCount = RegExp(r'[a-zA-Z]').allMatches(text).length;
     if (alphaCount < text.length * 0.3) return false;
-    
+
     return true;
   }
 
   /// Estimates speech duration in milliseconds
   static int estimateSpeechDuration(String text, double speechRate) {
     if (text.isEmpty) return 0;
-    
+
     // Average words per minute for TTS: ~150-200 WPM
     // Adjust based on speech rate
     final baseWPM = 175.0;
     final adjustedWPM = baseWPM * speechRate;
-    
+
     final wordCount = text.split(RegExp(r'\s+')).length;
     final durationMinutes = wordCount / adjustedWPM;
-    
+
     return (durationMinutes * 60 * 1000).round(); // Convert to milliseconds
   }
 }

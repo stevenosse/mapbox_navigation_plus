@@ -7,21 +7,27 @@ import 'constants.dart' as nav_constants;
 class RouteUtils {
   /// Converts a RouteData to GeoJSON format for map visualization
   static String routeToGeoJson(RouteData route) {
-    final geoJson = route.hasTrafficData 
-        ? route.toGeoJsonWithTraffic() 
-        : {'type': 'FeatureCollection', 'features': [route.toGeoJson()]};
-    
+    final geoJson = route.hasTrafficData
+        ? route.toGeoJsonWithTraffic()
+        : {
+            'type': 'FeatureCollection',
+            'features': [route.toGeoJson()]
+          };
+
     return json.encode(geoJson);
   }
 
   /// Converts a simple route geometry to GeoJSON LineString
-  static String geometryToGeoJson(List<Waypoint> geometry, {
+  static String geometryToGeoJson(
+    List<Waypoint> geometry, {
     Map<String, dynamic>? properties,
   }) {
-    final coordinates = geometry.map((waypoint) => [
-      waypoint.longitude,
-      waypoint.latitude,
-    ]).toList();
+    final coordinates = geometry
+        .map((waypoint) => [
+              waypoint.longitude,
+              waypoint.latitude,
+            ])
+        .toList();
 
     final geoJson = {
       'type': 'Feature',
@@ -77,7 +83,8 @@ class RouteUtils {
     }
 
     // Sum up individual segment durations from traffic annotations
-    return route.trafficAnnotations!.fold(0.0, (sum, annotation) => sum + annotation.duration);
+    return route.trafficAnnotations!
+        .fold(0.0, (sum, annotation) => sum + annotation.duration);
   }
 
   /// Gets a human-readable traffic description for the route
@@ -87,8 +94,10 @@ class RouteUtils {
     }
 
     final annotations = route.trafficAnnotations!;
-    final severeCongestion = annotations.where((a) => a.congestion == 'severe').length;
-    final heavyCongestion = annotations.where((a) => a.congestion == 'heavy').length;
+    final severeCongestion =
+        annotations.where((a) => a.congestion == 'severe').length;
+    final heavyCongestion =
+        annotations.where((a) => a.congestion == 'heavy').length;
     final totalSegments = annotations.length;
 
     if (severeCongestion > totalSegments * 0.3) {
@@ -104,29 +113,30 @@ class RouteUtils {
   static RouteData getFasterRoute(RouteData route1, RouteData route2) {
     final duration1 = calculateTrafficAdjustedDuration(route1);
     final duration2 = calculateTrafficAdjustedDuration(route2);
-    
+
     return duration1 <= duration2 ? route1 : route2;
   }
 
   /// Determines if a route recalculation is recommended based on traffic changes
   static bool shouldRecalculateRoute(
-    RouteData currentRoute, 
+    RouteData currentRoute,
     RouteData newRoute, {
     double timeSavingsThreshold = 300.0, // 5 minutes in seconds
     double distanceSavingsThreshold = 1000.0, // 1 km in meters
   }) {
     final currentDuration = calculateTrafficAdjustedDuration(currentRoute);
     final newDuration = calculateTrafficAdjustedDuration(newRoute);
-    
+
     final timeSavings = currentDuration - newDuration;
     final distanceSavings = currentRoute.totalDistance - newRoute.totalDistance;
-    
-    return timeSavings >= timeSavingsThreshold || 
-           distanceSavings >= distanceSavingsThreshold;
+
+    return timeSavings >= timeSavingsThreshold ||
+        distanceSavings >= distanceSavingsThreshold;
   }
 
   /// Creates a simplified GeoJSON for route overview (fewer points)
-  static String routeToSimplifiedGeoJson(RouteData route, {int maxPoints = 50}) {
+  static String routeToSimplifiedGeoJson(RouteData route,
+      {int maxPoints = 50}) {
     final geometry = route.geometry;
     if (geometry.length <= maxPoints) {
       return routeToGeoJson(route);
@@ -135,14 +145,14 @@ class RouteUtils {
     // Sample points evenly across the route
     final simplifiedGeometry = <Waypoint>[];
     final step = geometry.length / maxPoints;
-    
+
     for (int i = 0; i < maxPoints; i++) {
       final index = (i * step).round();
       if (index < geometry.length) {
         simplifiedGeometry.add(geometry[index]);
       }
     }
-    
+
     // Always include the last point
     if (simplifiedGeometry.last != geometry.last) {
       simplifiedGeometry.add(geometry.last);
@@ -155,9 +165,9 @@ class RouteUtils {
   /// Validates if a route has valid geometry
   static bool isValidRoute(RouteData route) {
     return route.geometry.length >= 2 &&
-           route.steps.isNotEmpty &&
-           route.totalDistance > 0 &&
-           route.totalDuration > 0;
+        route.steps.isNotEmpty &&
+        route.totalDistance > 0 &&
+        route.totalDuration > 0;
   }
 
   /// Calculates the bounding box for a route
@@ -196,7 +206,8 @@ class RouteUtils {
     if (annotations.isEmpty) return 50.0; // Default speed in km/h
 
     final validSpeeds = annotations
-        .where((annotation) => annotation.speed != null && annotation.speed! > 0)
+        .where(
+            (annotation) => annotation.speed != null && annotation.speed! > 0)
         .map((annotation) => annotation.speed!)
         .toList();
 

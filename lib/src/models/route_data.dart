@@ -6,16 +6,16 @@ import 'waypoint.dart';
 class TrafficAnnotation {
   /// Congestion level (severe, heavy, moderate, low, unknown)
   final String congestion;
-  
+
   /// Numeric congestion level (0-100)
   final int? congestionNumeric;
-  
+
   /// Speed in km/h for this segment
   final double? speed;
-  
+
   /// Distance of this segment in meters
   final double distance;
-  
+
   /// Duration of this segment in seconds
   final double duration;
 
@@ -48,28 +48,28 @@ class TrafficAnnotation {
 class RouteData {
   /// List of navigation steps for this route
   final List<NavigationStep> steps;
-  
+
   /// Total distance of the route in meters
   final double totalDistance;
-  
+
   /// Estimated total duration in seconds
   final double totalDuration;
-  
+
   /// Complete route geometry as a list of coordinates
   final List<Waypoint> geometry;
-  
+
   /// The origin point of the route
   final Waypoint origin;
-  
+
   /// The destination point of the route
   final Waypoint destination;
-  
+
   /// Optional waypoints along the route
   final List<Waypoint>? waypoints;
-  
+
   /// Route profile used (driving, walking, cycling)
   final String profile;
-  
+
   /// Traffic annotations for route segments (only available for driving-traffic profile)
   final List<TrafficAnnotation>? trafficAnnotations;
 
@@ -96,7 +96,7 @@ class RouteData {
     final legs = route['legs'] as List<dynamic>;
     final geometry = route['geometry'] as Map<String, dynamic>;
     final coordinates = geometry['coordinates'] as List<dynamic>;
-    
+
     // Convert coordinates to Waypoint objects
     final routeGeometry = coordinates.map((coord) {
       final coordList = coord as List<dynamic>;
@@ -105,30 +105,32 @@ class RouteData {
         coordList[0].toDouble(), // longitude
       );
     }).toList();
-    
+
     // Extract all steps from all legs
     final allSteps = <NavigationStep>[];
     for (final leg in legs) {
       final legSteps = leg['steps'] as List<dynamic>;
       for (final step in legSteps) {
-        allSteps.add(NavigationStep.fromMapboxStep(step as Map<String, dynamic>));
+        allSteps
+            .add(NavigationStep.fromMapboxStep(step as Map<String, dynamic>));
       }
     }
-    
+
     // Extract traffic annotations if available (only for driving-traffic profile)
     List<TrafficAnnotation>? trafficAnnotations;
     if (profile?.contains('traffic') == true) {
       final annotations = <TrafficAnnotation>[];
-      
+
       for (final leg in legs) {
         final legAnnotation = leg['annotation'] as Map<String, dynamic>?;
         if (legAnnotation != null) {
           final congestionList = legAnnotation['congestion'] as List<dynamic>?;
-          final congestionNumericList = legAnnotation['congestion_numeric'] as List<dynamic>?;
+          final congestionNumericList =
+              legAnnotation['congestion_numeric'] as List<dynamic>?;
           final speedList = legAnnotation['speed'] as List<dynamic>?;
           final distanceList = legAnnotation['distance'] as List<dynamic>?;
           final durationList = legAnnotation['duration'] as List<dynamic>?;
-          
+
           if (congestionList != null) {
             for (int i = 0; i < congestionList.length; i++) {
               annotations.add(TrafficAnnotation(
@@ -142,12 +144,12 @@ class RouteData {
           }
         }
       }
-      
+
       if (annotations.isNotEmpty) {
         trafficAnnotations = annotations;
       }
     }
-    
+
     return RouteData(
       steps: allSteps,
       totalDistance: (route['distance'] as num?)?.toDouble() ?? 0.0,
@@ -174,7 +176,7 @@ class RouteData {
   NavigationStep? get nextStep {
     final current = currentStep;
     if (current == null) return null;
-    
+
     final currentIndex = steps.indexOf(current);
     if (currentIndex >= 0 && currentIndex < steps.length - 1) {
       return steps[currentIndex + 1];
@@ -186,20 +188,20 @@ class RouteData {
   double getRemainingDistance(Waypoint currentPosition) {
     final current = currentStep;
     if (current == null) return 0.0;
-    
+
     final currentIndex = steps.indexOf(current);
     double remaining = 0.0;
-    
+
     // Add distance from current position to end of current step
     remaining += currentPosition.distanceTo(
       Waypoint.fromPosition(current.endLocation),
     );
-    
+
     // Add distance of all remaining steps
     for (int i = currentIndex + 1; i < steps.length; i++) {
       remaining += steps[i].distance;
     }
-    
+
     return remaining;
   }
 
@@ -207,19 +209,19 @@ class RouteData {
   double getRemainingDuration(Waypoint currentPosition) {
     final current = currentStep;
     if (current == null) return 0.0;
-    
+
     final currentIndex = steps.indexOf(current);
     double remaining = 0.0;
-    
+
     // Estimate remaining time for current step based on progress
     final stepProgress = getStepProgress(currentPosition, current);
     remaining += current.duration * (1.0 - stepProgress);
-    
+
     // Add duration of all remaining steps
     for (int i = currentIndex + 1; i < steps.length; i++) {
       remaining += steps[i].duration;
     }
-    
+
     return remaining;
   }
 
@@ -231,11 +233,12 @@ class RouteData {
       step.endLocation.latitude,
       step.endLocation.longitude,
     );
-    
+
     if (totalStepDistance == 0) return 1.0;
-    
-    final distanceFromStart = Waypoint.fromPosition(step.startLocation).distanceTo(currentPosition);
-    
+
+    final distanceFromStart =
+        Waypoint.fromPosition(step.startLocation).distanceTo(currentPosition);
+
     return (distanceFromStart / totalStepDistance).clamp(0.0, 1.0);
   }
 
@@ -265,7 +268,7 @@ class RouteData {
   }
 
   // Convenience methods for backward compatibility with Position objects
-  
+
   /// Calculates the remaining distance from current position (Position compatibility)
   double getRemainingDistanceFromPosition(Position currentPosition) {
     return getRemainingDistance(Waypoint.fromPosition(currentPosition));
@@ -277,7 +280,8 @@ class RouteData {
   }
 
   /// Calculates progress through a specific step (Position compatibility)
-  double getStepProgressFromPosition(Position currentPosition, NavigationStep step) {
+  double getStepProgressFromPosition(
+      Position currentPosition, NavigationStep step) {
     return getStepProgress(Waypoint.fromPosition(currentPosition), step);
   }
 
@@ -310,10 +314,12 @@ class RouteData {
 
   /// Converts route geometry to GeoJSON LineString format
   Map<String, dynamic> toGeoJson() {
-    final coordinates = geometry.map((waypoint) => [
-      waypoint.longitude,
-      waypoint.latitude,
-    ]).toList();
+    final coordinates = geometry
+        .map((waypoint) => [
+              waypoint.longitude,
+              waypoint.latitude,
+            ])
+        .toList();
 
     return {
       'type': 'Feature',
@@ -338,33 +344,34 @@ class RouteData {
 
     // Create multiple line segments for different traffic levels
     final features = <Map<String, dynamic>>[];
-    
+
     // Group consecutive segments with same congestion level
     int segmentStart = 0;
     String? currentCongestion;
-    
+
     for (int i = 0; i < trafficAnnotations!.length; i++) {
       final annotation = trafficAnnotations![i];
-      
-      if (currentCongestion != null && 
+
+      if (currentCongestion != null &&
           annotation.congestion != currentCongestion) {
         // Create feature for previous segment
         features.add(_createTrafficSegmentFeature(
-          segmentStart, 
-          i, 
+          segmentStart,
+          i,
           currentCongestion,
         ));
         segmentStart = i;
       }
-      
+
       currentCongestion = annotation.congestion;
     }
-    
+
     // Add final segment
-    if (currentCongestion != null && segmentStart < trafficAnnotations!.length) {
+    if (currentCongestion != null &&
+        segmentStart < trafficAnnotations!.length) {
       features.add(_createTrafficSegmentFeature(
-        segmentStart, 
-        trafficAnnotations!.length, 
+        segmentStart,
+        trafficAnnotations!.length,
         currentCongestion,
       ));
     }
@@ -377,8 +384,8 @@ class RouteData {
 
   /// Creates a GeoJSON feature for a traffic segment
   Map<String, dynamic> _createTrafficSegmentFeature(
-    int startIndex, 
-    int endIndex, 
+    int startIndex,
+    int endIndex,
     String congestion,
   ) {
     final segmentCoordinates = geometry
@@ -403,7 +410,8 @@ class RouteData {
   }
 
   /// Whether this route has traffic data
-  bool get hasTrafficData => trafficAnnotations != null && trafficAnnotations!.isNotEmpty;
+  bool get hasTrafficData =>
+      trafficAnnotations != null && trafficAnnotations!.isNotEmpty;
 
   @override
   String toString() {

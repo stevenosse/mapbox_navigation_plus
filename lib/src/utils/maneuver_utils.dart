@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Utility class for handling navigation maneuver types and their visual representations
 class ManeuverUtils {
   /// Maps maneuver types to appropriate Material Design icons
-  /// 
+  ///
   /// Handles various maneuver types including turns, merges, roundabouts, etc.
   static IconData getManeuverIcon(String maneuver) {
     switch (maneuver.toLowerCase()) {
@@ -14,7 +14,7 @@ class ManeuverUtils {
       case 'slight left':
       case 'sharp left':
         return Icons.turn_left;
-      
+
       // Right turns
       case 'turn':
       case 'turn-right':
@@ -23,7 +23,7 @@ class ManeuverUtils {
       case 'slight right':
       case 'sharp right':
         return Icons.turn_right;
-      
+
       // Specific turn directions
       case 'turn_sharp_right':
         return Icons.turn_sharp_right;
@@ -33,19 +33,19 @@ class ManeuverUtils {
         return Icons.turn_sharp_left;
       case 'turn_slight_left':
         return Icons.turn_slight_left;
-      
+
       // Straight movements
       case 'straight':
       case 'continue':
         return Icons.straight;
-      
+
       // U-turns
       case 'uturn':
       case 'u-turn':
         return Icons.u_turn_left;
       case 'u_turn_right':
         return Icons.u_turn_right;
-      
+
       // Highway maneuvers
       case 'merge':
         return Icons.merge;
@@ -54,7 +54,7 @@ class ManeuverUtils {
       case 'on_ramp':
       case 'off_ramp':
         return Icons.ramp_right;
-      
+
       // Intersections
       case 'fork':
         return Icons.call_split;
@@ -63,12 +63,12 @@ class ManeuverUtils {
         return Icons.roundabout_right;
       case 'roundabout_left':
         return Icons.roundabout_left;
-      
+
       // Destination
       case 'arrive':
       case 'destination':
         return Icons.flag;
-      
+
       // Default
       default:
         return Icons.navigation;

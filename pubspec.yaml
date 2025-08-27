@@ -12,7 +12,6 @@ dependencies:
   mapbox_maps_flutter: ^2.10.0
   geolocator: ^14.0.2
   http: ^1.5.0
-  turf: ^0.0.10
   flutter_tts: ^4.2.3
 
 dev_dependencies:

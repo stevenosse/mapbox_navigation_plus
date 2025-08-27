@@ -1,7 +1,7 @@
 /// Utility functions for formatting distances, durations, and other navigation data
 class FormattingUtils {
   /// Formats distance in meters to a human-readable string
-  /// 
+  ///
   /// Returns meters for distances < 1000m, kilometers for larger distances
   static String formatDistance(double meters) {
     if (meters < 1000) {
@@ -12,7 +12,7 @@ class FormattingUtils {
   }
 
   /// Formats duration in seconds to a human-readable string
-  /// 
+  ///
   /// Returns minutes for durations < 60 minutes, hours and minutes for longer durations
   static String formatDuration(double seconds) {
     final minutes = (seconds / 60).round();
@@ -34,12 +34,24 @@ class FormattingUtils {
   /// Formats bearing in degrees to cardinal direction
   static String formatBearing(double degrees) {
     const directions = [
-      'N', 'NNE', 'NE', 'ENE',
-      'E', 'ESE', 'SE', 'SSE',
-      'S', 'SSW', 'SW', 'WSW',
-      'W', 'WNW', 'NW', 'NNW'
+      'N',
+      'NNE',
+      'NE',
+      'ENE',
+      'E',
+      'ESE',
+      'SE',
+      'SSE',
+      'S',
+      'SSW',
+      'SW',
+      'WSW',
+      'W',
+      'WNW',
+      'NW',
+      'NNW'
     ];
-    
+
     final index = ((degrees + 11.25) / 22.5).floor() % 16;
     return directions[index];
   }

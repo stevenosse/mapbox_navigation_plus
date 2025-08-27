@@ -53,7 +53,6 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
 
   bool _isNavigating = false;
   NavigationState _navigationState = NavigationState.idle();
-  NavigationStep? _currentStep;
 
   @override
   Widget build(BuildContext context) {
@@ -91,34 +90,6 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                if (_currentStep != null)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Current Instruction:',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(_currentStep!.instruction),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                  'Distance: ${_currentStep!.distance.toStringAsFixed(0)}m'),
-                              Text(
-                                  'Duration: ${_currentStep!.duration.toStringAsFixed(0)}s'),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
@@ -192,15 +163,6 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
         });
       }
     });
-
-    // Listen to navigation step changes
-    _navigationController!.stepStream.listen((step) {
-      if (mounted) {
-        setState(() {
-          _currentStep = step;
-        });
-      }
-    });
   }
 
   void _onNavigationStateChanged(NavigationState state) {
@@ -255,9 +217,6 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
 
     try {
       await _navigationController!.stopNavigation();
-      setState(() {
-        _currentStep = null;
-      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

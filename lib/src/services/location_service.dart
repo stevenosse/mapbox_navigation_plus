@@ -8,13 +8,14 @@ class LocationService {
   StreamController<Position>? _positionController;
   StreamSubscription<Position>? _locationSubscription;
   Timer? _simulationTimer;
-  
+
   bool _isSimulating = false;
   Position? _currentSimulatedPosition;
   List<Position>? _simulationRoute;
   int _simulationIndex = 0;
-  double _simulationSpeed = nav_constants.NavigationConstants.simulationSpeed; // Using shared constants
-  
+  double _simulationSpeed = nav_constants
+      .NavigationConstants.simulationSpeed; // Using shared constants
+
   /// Stream of position updates
   Stream<Position> get positionStream {
     _positionController ??= StreamController<Position>.broadcast();
@@ -36,7 +37,7 @@ class LocationService {
     try {
       // Stop any existing simulation
       stopSimulation();
-      
+
       // Check and request permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -46,23 +47,23 @@ class LocationService {
         }
       }
 
-      if (permission == LocationPermission.deniedForever || 
+      if (permission == LocationPermission.deniedForever ||
           permission == LocationPermission.unableToDetermine) {
         throw ErrorHandler.handleLocationPermission(permission);
       }
-      
+
       // Check if location services are enabled
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw LocationException.serviceDisabled();
       }
-      
+
       // Configure location settings
       const locationSettings = LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 5,
       );
-      
+
       // Start listening to position updates
       await ErrorHandler.safeExecute(
         () async {
@@ -71,7 +72,8 @@ class LocationService {
           ).listen(
             (position) {
               // Check accuracy threshold
-              if (position.accuracy > nav_constants.NavigationConstants.locationAccuracyThreshold) {
+              if (position.accuracy >
+                  nav_constants.NavigationConstants.locationAccuracyThreshold) {
                 ErrorHandler.logError(
                   LocationException.accuracyTooLow(position.accuracy),
                   context: 'Location tracking',
@@ -82,16 +84,15 @@ class LocationService {
               _positionController?.add(position);
             },
             onError: (error) {
-              final locationError = error is Exception 
-                ? ErrorHandler.handleGeolocatorException(error)
-                : LocationException('Location stream error: $error');
+              final locationError = error is Exception
+                  ? ErrorHandler.handleGeolocatorException(error)
+                  : LocationException('Location stream error: $error');
               _positionController?.addError(locationError);
             },
           );
         },
         context: 'Starting location tracking',
       );
-      
     } catch (e) {
       throw LocationServiceException('Failed to start location tracking: $e');
     }
@@ -106,19 +107,19 @@ class LocationService {
     if (route.isEmpty) {
       throw const LocationServiceException('Cannot simulate empty route');
     }
-    
+
     // Stop real location tracking
     stopLocationTracking();
-    
+
     _isSimulating = true;
     _simulationRoute = List.from(route);
     _simulationIndex = 0;
     _simulationSpeed = speedMps;
     _currentSimulatedPosition = route.first;
-    
+
     // Emit initial position
     _positionController?.add(_currentSimulatedPosition!);
-    
+
     // Start simulation timer
     _simulationTimer = Timer.periodic(updateInterval, (timer) {
       _updateSimulatedPosition();
@@ -132,14 +133,14 @@ class LocationService {
     Duration updateInterval = const Duration(milliseconds: 1000),
   }) {
     stopLocationTracking();
-    
+
     _isSimulating = true;
     _simulationSpeed = speedMps;
     _currentSimulatedPosition = startPosition;
-    
+
     // Emit initial position
     _positionController?.add(_currentSimulatedPosition!);
-    
+
     // For free simulation (not following a route), just emit the same position
     _simulationTimer = Timer.periodic(updateInterval, (timer) {
       _positionController?.add(_currentSimulatedPosition!);
@@ -148,15 +149,16 @@ class LocationService {
 
   /// Updates the simulated position along the route
   void _updateSimulatedPosition() {
-    if (_simulationRoute == null || _simulationIndex >= _simulationRoute!.length - 1) {
+    if (_simulationRoute == null ||
+        _simulationIndex >= _simulationRoute!.length - 1) {
       // Reached end of route
       stopSimulation();
       return;
     }
-    
+
     final currentPos = _simulationRoute![_simulationIndex];
     final nextPos = _simulationRoute![_simulationIndex + 1];
-    
+
     // Calculate distance to next point
     final distance = Geolocator.distanceBetween(
       currentPos.latitude,
@@ -164,10 +166,11 @@ class LocationService {
       nextPos.latitude,
       nextPos.longitude,
     );
-    
+
     // Calculate how far we should move in this update
-    final moveDistance = _simulationSpeed * (nav_constants.NavigationConstants.locationUpdateInterval / 1000);
-    
+    final moveDistance = _simulationSpeed *
+        (nav_constants.NavigationConstants.locationUpdateInterval / 1000);
+
     if (moveDistance >= distance) {
       // Move to next waypoint
       _simulationIndex++;
@@ -175,11 +178,11 @@ class LocationService {
     } else {
       // Interpolate position between current and next waypoint
       final ratio = moveDistance / distance;
-      final newLat = currentPos.latitude + 
+      final newLat = currentPos.latitude +
           (nextPos.latitude - currentPos.latitude) * ratio;
-      final newLng = currentPos.longitude + 
+      final newLng = currentPos.longitude +
           (nextPos.longitude - currentPos.longitude) * ratio;
-      
+
       // Calculate bearing for heading
       final bearing = Geolocator.bearingBetween(
         currentPos.latitude,
@@ -187,7 +190,7 @@ class LocationService {
         nextPos.latitude,
         nextPos.longitude,
       );
-      
+
       _currentSimulatedPosition = Position(
         latitude: newLat,
         longitude: newLng,
@@ -200,11 +203,11 @@ class LocationService {
         speed: _simulationSpeed,
         speedAccuracy: 1.0,
       );
-      
+
       // Update the route with new interpolated position
       _simulationRoute![_simulationIndex] = _currentSimulatedPosition!;
     }
-    
+
     // Emit updated position
     _positionController?.add(_currentSimulatedPosition!);
   }
@@ -224,20 +227,22 @@ class LocationService {
     if (_isSimulating && _currentSimulatedPosition != null) {
       return _currentSimulatedPosition!;
     }
-    
+
     try {
       final permission = await _checkLocationPermission();
       if (!permission) {
         throw const LocationServiceException('Location permission denied');
       }
-      
+
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(milliseconds: nav_constants.NavigationConstants.locationUpdateInterval),
+          timeLimit: Duration(
+              milliseconds:
+                  nav_constants.NavigationConstants.locationUpdateInterval),
         ),
       );
-      
+
       _currentSimulatedPosition = position;
       return position;
     } catch (e) {
@@ -269,18 +274,18 @@ class LocationService {
   /// Checks and requests location permissions
   Future<bool> _checkLocationPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
-    
+
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         return false;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       return false;
     }
-    
+
     return true;
   }
 

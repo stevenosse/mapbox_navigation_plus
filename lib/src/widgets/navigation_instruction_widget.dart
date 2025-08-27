@@ -9,25 +9,25 @@ import '../utils/constants.dart' as nav_constants;
 class NavigationInstructionWidget extends StatelessWidget {
   /// The current navigation step to display
   final NavigationStep? currentStep;
-  
+
   /// The next navigation step (optional)
   final NavigationStep? nextStep;
-  
+
   /// The complete route data for additional context
   final RouteData? route;
-  
+
   /// Remaining distance to destination
   final double? remainingDistance;
-  
+
   /// Remaining time to destination
   final double? remainingTime;
-  
+
   /// Custom styling for the instruction widget
   final NavigationInstructionStyle? style;
-  
+
   /// Whether to show the next step preview
   final bool showNextStep;
-  
+
   /// Whether to show remaining distance and time
   final bool showProgress;
 
@@ -46,7 +46,7 @@ class NavigationInstructionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveStyle = style ?? NavigationInstructionStyle.defaultStyle();
-    
+
     return Container(
       margin: effectiveStyle.margin,
       padding: effectiveStyle.padding,
@@ -57,11 +57,12 @@ class NavigationInstructionWidget extends StatelessWidget {
         children: [
           // Current instruction
           _buildCurrentInstruction(effectiveStyle),
-          
+
           // Progress information
-          if (showProgress && (remainingDistance != null || remainingTime != null))
+          if (showProgress &&
+              (remainingDistance != null || remainingTime != null))
             _buildProgressInfo(effectiveStyle),
-          
+
           // Next step preview
           if (showNextStep && nextStep != null)
             _buildNextStepPreview(effectiveStyle),
@@ -69,7 +70,7 @@ class NavigationInstructionWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildCurrentInstruction(NavigationInstructionStyle style) {
     if (currentStep == null) {
       return Text(
@@ -77,7 +78,7 @@ class NavigationInstructionWidget extends StatelessWidget {
         style: style.instructionTextStyle,
       );
     }
-    
+
     return Row(
       children: [
         // Maneuver icon
@@ -95,7 +96,7 @@ class NavigationInstructionWidget extends StatelessWidget {
             size: nav_constants.NavigationConstants.iconSize,
           ),
         ),
-        
+
         // Instruction text
         Expanded(
           child: Column(
@@ -118,7 +119,7 @@ class NavigationInstructionWidget extends StatelessWidget {
       ],
     );
   }
-  
+
   Widget _buildProgressInfo(NavigationInstructionStyle style) {
     return Container(
       margin: const EdgeInsets.only(top: 12),
@@ -160,7 +161,7 @@ class NavigationInstructionWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildNextStepPreview(NavigationInstructionStyle style) {
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -189,8 +190,6 @@ class NavigationInstructionWidget extends StatelessWidget {
       ),
     );
   }
-  
-
 }
 
 /// Styling configuration for the navigation instruction widget
@@ -208,7 +207,7 @@ class NavigationInstructionStyle {
   final Color nextStepIconColor;
   final Color progressBackgroundColor;
   final Color nextStepBackgroundColor;
-  
+
   const NavigationInstructionStyle({
     required this.margin,
     required this.padding,
@@ -224,7 +223,7 @@ class NavigationInstructionStyle {
     required this.progressBackgroundColor,
     required this.nextStepBackgroundColor,
   });
-  
+
   factory NavigationInstructionStyle.defaultStyle() {
     return NavigationInstructionStyle(
       margin: const EdgeInsets.all(16),
@@ -271,7 +270,7 @@ class NavigationInstructionStyle {
       nextStepBackgroundColor: Colors.grey.withValues(alpha: 0.05),
     );
   }
-  
+
   NavigationInstructionStyle copyWith({
     EdgeInsets? margin,
     EdgeInsets? padding,
@@ -299,8 +298,10 @@ class NavigationInstructionStyle {
       iconColor: iconColor ?? this.iconColor,
       iconBackgroundColor: iconBackgroundColor ?? this.iconBackgroundColor,
       nextStepIconColor: nextStepIconColor ?? this.nextStepIconColor,
-      progressBackgroundColor: progressBackgroundColor ?? this.progressBackgroundColor,
-      nextStepBackgroundColor: nextStepBackgroundColor ?? this.nextStepBackgroundColor,
+      progressBackgroundColor:
+          progressBackgroundColor ?? this.progressBackgroundColor,
+      nextStepBackgroundColor:
+          nextStepBackgroundColor ?? this.nextStepBackgroundColor,
     );
   }
 }

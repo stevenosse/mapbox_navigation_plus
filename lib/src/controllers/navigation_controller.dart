@@ -21,7 +21,8 @@ typedef VoiceInstructionBuilder = String Function({
 });
 
 /// Callback for creating localized navigation start announcement
-typedef NavigationStartBuilder = String Function({String? destinationName, double? totalDistance});
+typedef NavigationStartBuilder = String Function(
+    {String? destinationName, double? totalDistance});
 
 /// Callback for creating localized arrival announcement
 typedef ArrivalAnnouncementBuilder = String Function({String? destinationName});
@@ -50,8 +51,10 @@ class NavigationController {
   // Using shared constants from NavigationConstants
 
   // Stream controllers for state updates
-  final StreamController<NavigationState> _stateController = StreamController<NavigationState>.broadcast();
-  final StreamController<NavigationStep> _stepController = StreamController<NavigationStep>.broadcast();
+  final StreamController<NavigationState> _stateController =
+      StreamController<NavigationState>.broadcast();
+  final StreamController<NavigationStep> _stepController =
+      StreamController<NavigationStep>.broadcast();
 
   NavigationController({
     required LocationService locationService,
@@ -283,7 +286,8 @@ class NavigationController {
   }) async {
     if (_currentRoute == null) return;
 
-    final position = currentPosition ?? _currentState.currentPosition?.toPosition();
+    final position =
+        currentPosition ?? _currentState.currentPosition?.toPosition();
     if (position == null) return;
 
     try {
@@ -329,7 +333,8 @@ class NavigationController {
       return false;
     }
 
-    final position = currentPosition ?? _currentState.currentPosition?.toPosition();
+    final position =
+        currentPosition ?? _currentState.currentPosition?.toPosition();
     if (position == null) return false;
 
     try {
@@ -390,9 +395,11 @@ class NavigationController {
 
     if (currentStep == null) {
       // All steps completed, check if arrived
-      final distanceToDestination = Waypoint.fromPosition(position).distanceTo(route.destination);
+      final distanceToDestination =
+          Waypoint.fromPosition(position).distanceTo(route.destination);
 
-      if (distanceToDestination <= nav_constants.NavigationConstants.arrivalThreshold) {
+      if (distanceToDestination <=
+          nav_constants.NavigationConstants.arrivalThreshold) {
         // Announce arrival with localized text
         if (_voiceService != null && _voiceService!.isEnabled) {
           if (_arrivalAnnouncementBuilder != null) {
@@ -401,20 +408,23 @@ class NavigationController {
             );
             await _voiceService!.testAnnouncement(localizedAnnouncement);
           } else {
-            await _voiceService!.announceArrival(destinationName: route.destination.name);
+            await _voiceService!
+                .announceArrival(destinationName: route.destination.name);
           }
         }
 
-        _updateState(NavigationState.arrived(route, Waypoint.fromPosition(position)));
+        _updateState(
+            NavigationState.arrived(route, Waypoint.fromPosition(position)));
       }
       return;
     }
 
     // Get current step and check for advancement
-    final distanceToStepEnd =
-        Waypoint.fromPosition(position).distanceTo(Waypoint.fromPosition(currentStep.endLocation));
+    final distanceToStepEnd = Waypoint.fromPosition(position)
+        .distanceTo(Waypoint.fromPosition(currentStep.endLocation));
 
-    if (distanceToStepEnd <= nav_constants.NavigationConstants.stepAdvanceThreshold) {
+    if (distanceToStepEnd <=
+        nav_constants.NavigationConstants.stepAdvanceThreshold) {
       await _advanceToNextStep(position);
       return;
     }

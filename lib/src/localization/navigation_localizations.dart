@@ -8,10 +8,12 @@ class NavigationLocalizations {
   final Locale locale;
 
   static NavigationLocalizations of(BuildContext context) {
-    return Localizations.of<NavigationLocalizations>(context, NavigationLocalizations)!;
+    return Localizations.of<NavigationLocalizations>(
+        context, NavigationLocalizations)!;
   }
 
-  static const LocalizationsDelegate<NavigationLocalizations> delegate = _NavigationLocalizationsDelegate();
+  static const LocalizationsDelegate<NavigationLocalizations> delegate =
+      _NavigationLocalizationsDelegate();
 
   static const List<Locale> supportedLocales = [
     Locale('en'),
@@ -19,35 +21,57 @@ class NavigationLocalizations {
   ];
 
   // Navigation status strings
-  String get readyToNavigate => _localizedValues[locale.languageCode]!['readyToNavigate']!;
-  String get calculatingRoute => _localizedValues[locale.languageCode]!['calculatingRoute']!;
-  String get navigating => _localizedValues[locale.languageCode]!['navigating']!;
-  String get navigationPaused => _localizedValues[locale.languageCode]!['navigationPaused']!;
-  String get arrivedAtDestination => _localizedValues[locale.languageCode]!['arrivedAtDestination']!;
-  String get navigationError => _localizedValues[locale.languageCode]!['navigationError']!;
+  String get readyToNavigate =>
+      _localizedValues[locale.languageCode]!['readyToNavigate']!;
+  String get calculatingRoute =>
+      _localizedValues[locale.languageCode]!['calculatingRoute']!;
+  String get navigating =>
+      _localizedValues[locale.languageCode]!['navigating']!;
+  String get navigationPaused =>
+      _localizedValues[locale.languageCode]!['navigationPaused']!;
+  String get arrivedAtDestination =>
+      _localizedValues[locale.languageCode]!['arrivedAtDestination']!;
+  String get navigationError =>
+      _localizedValues[locale.languageCode]!['navigationError']!;
 
   // Instruction enhancement strings
-  String get turnLeftNow => _localizedValues[locale.languageCode]!['turnLeftNow']!;
-  String get turnRightNow => _localizedValues[locale.languageCode]!['turnRightNow']!;
+  String get turnLeftNow =>
+      _localizedValues[locale.languageCode]!['turnLeftNow']!;
+  String get turnRightNow =>
+      _localizedValues[locale.languageCode]!['turnRightNow']!;
   String get mergeNow => _localizedValues[locale.languageCode]!['mergeNow']!;
-  String get takeTheExit => _localizedValues[locale.languageCode]!['takeTheExit']!;
+  String get takeTheExit =>
+      _localizedValues[locale.languageCode]!['takeTheExit']!;
   String get getReady => _localizedValues[locale.languageCode]!['getReady']!;
-  String get prepareToTurnLeft => _localizedValues[locale.languageCode]!['prepareToTurnLeft']!;
-  String get prepareToTurnRight => _localizedValues[locale.languageCode]!['prepareToTurnRight']!;
-  String get prepareToMerge => _localizedValues[locale.languageCode]!['prepareToMerge']!;
-  String get prepareToExit => _localizedValues[locale.languageCode]!['prepareToExit']!;
+  String get prepareToTurnLeft =>
+      _localizedValues[locale.languageCode]!['prepareToTurnLeft']!;
+  String get prepareToTurnRight =>
+      _localizedValues[locale.languageCode]!['prepareToTurnRight']!;
+  String get prepareToMerge =>
+      _localizedValues[locale.languageCode]!['prepareToMerge']!;
+  String get prepareToExit =>
+      _localizedValues[locale.languageCode]!['prepareToExit']!;
   String get prepareTo => _localizedValues[locale.languageCode]!['prepareTo']!;
-  String get inDistance => _localizedValues[locale.languageCode]!['inDistance']!;
+  String get inDistance =>
+      _localizedValues[locale.languageCode]!['inDistance']!;
 
   // Voice instruction strings
-  String get voiceTestMessage => _localizedValues[locale.languageCode]!['voiceTestMessage']!;
-  String get navigationStarting => _localizedValues[locale.languageCode]!['navigationStarting']!;
-  String get youHaveArrived => _localizedValues[locale.languageCode]!['youHaveArrived']!;
-  String get recalculatingRoute => _localizedValues[locale.languageCode]!['recalculatingRoute']!;
-  String get enterRoundabout => _localizedValues[locale.languageCode]!['enterRoundabout']!;
-  String get prepareToEnterRoundabout => _localizedValues[locale.languageCode]!['prepareToEnterRoundabout']!;
-  String get totalDistanceLabel => _localizedValues[locale.languageCode]!['totalDistanceLabel']!;
-  String get yourDestination => _localizedValues[locale.languageCode]!['yourDestination']!;
+  String get voiceTestMessage =>
+      _localizedValues[locale.languageCode]!['voiceTestMessage']!;
+  String get navigationStarting =>
+      _localizedValues[locale.languageCode]!['navigationStarting']!;
+  String get youHaveArrived =>
+      _localizedValues[locale.languageCode]!['youHaveArrived']!;
+  String get recalculatingRoute =>
+      _localizedValues[locale.languageCode]!['recalculatingRoute']!;
+  String get enterRoundabout =>
+      _localizedValues[locale.languageCode]!['enterRoundabout']!;
+  String get prepareToEnterRoundabout =>
+      _localizedValues[locale.languageCode]!['prepareToEnterRoundabout']!;
+  String get totalDistanceLabel =>
+      _localizedValues[locale.languageCode]!['totalDistanceLabel']!;
+  String get yourDestination =>
+      _localizedValues[locale.languageCode]!['yourDestination']!;
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'en': {
@@ -107,15 +131,18 @@ class NavigationLocalizations {
   };
 }
 
-class _NavigationLocalizationsDelegate extends LocalizationsDelegate<NavigationLocalizations> {
+class _NavigationLocalizationsDelegate
+    extends LocalizationsDelegate<NavigationLocalizations> {
   const _NavigationLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => NavigationLocalizations.supportedLocales.contains(Locale(locale.languageCode));
+  bool isSupported(Locale locale) => NavigationLocalizations.supportedLocales
+      .contains(Locale(locale.languageCode));
 
   @override
   Future<NavigationLocalizations> load(Locale locale) {
-    return SynchronousFuture<NavigationLocalizations>(NavigationLocalizations(locale));
+    return SynchronousFuture<NavigationLocalizations>(
+        NavigationLocalizations(locale));
   }
 
   @override

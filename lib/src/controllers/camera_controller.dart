@@ -47,7 +47,6 @@ class CameraController {
   }) async {
     if (_mapboxMap == null || !_isFollowingUser) return;
 
-
     if (_isNavigationMode && route != null) {
       await _updateNavigationCamera(
         userPosition: userPosition,
@@ -67,13 +66,14 @@ class CameraController {
   /// Updates camera to follow a specific navigation step
   Future<void> followStep(NavigationStep step) async {
     if (_mapboxMap == null) return;
-    
+
     // Calculate bearing for the step
     final stepBearing = step.getBearing();
-    
+
     // Update camera to look ahead in the direction of the step
     final cameraOptions = CameraOptions(
-      center: Point(coordinates: Position(
+      center: Point(
+          coordinates: Position(
         step.startLocation.longitude,
         step.startLocation.latitude,
       )),
@@ -81,16 +81,17 @@ class CameraController {
       bearing: stepBearing,
       pitch: _currentPitch,
     );
-    
+
     await _mapboxMap!.flyTo(cameraOptions, MapAnimationOptions(duration: 1500));
   }
-  
+
   /// Updates camera position smoothly for navigation
   Future<void> updatePosition(geo.Position position) async {
     if (_mapboxMap == null) return;
-    
+
     final cameraOptions = CameraOptions(
-      center: Point(coordinates: Position(
+      center: Point(
+          coordinates: Position(
         position.longitude,
         position.latitude,
       )),
@@ -98,7 +99,7 @@ class CameraController {
       bearing: position.heading >= 0 ? position.heading : _currentBearing,
       pitch: _currentPitch,
     );
-    
+
     await _mapboxMap!.setCamera(cameraOptions);
   }
 
@@ -124,7 +125,8 @@ class CameraController {
 
     // Create camera options
     final cameraOptions = CameraOptions(
-      center: Point(coordinates: Position(userPosition.longitude, userPosition.latitude)),
+      center: Point(
+          coordinates: Position(userPosition.longitude, userPosition.latitude)),
       zoom: _currentZoom,
       bearing: targetBearing,
       pitch: _currentPitch,
@@ -158,7 +160,8 @@ class CameraController {
     _currentPitch = nav_constants.NavigationConstants.overviewPitch;
 
     final cameraOptions = CameraOptions(
-      center: Point(coordinates: Position(userPosition.longitude, userPosition.latitude)),
+      center: Point(
+          coordinates: Position(userPosition.longitude, userPosition.latitude)),
       zoom: _currentZoom,
       bearing: targetBearing,
       pitch: _currentPitch,
@@ -169,7 +172,8 @@ class CameraController {
         await _mapboxMap!.flyTo(
             cameraOptions,
             MapAnimationOptions(
-              duration: nav_constants.NavigationConstants.quickAnimationDuration,
+              duration:
+                  nav_constants.NavigationConstants.quickAnimationDuration,
             ));
       } else {
         await _mapboxMap!.setCamera(cameraOptions);
@@ -261,7 +265,8 @@ class CameraController {
         await _mapboxMap!.flyTo(
             cameraOptions,
             MapAnimationOptions(
-              duration: nav_constants.NavigationConstants.quickAnimationDuration,
+              duration:
+                  nav_constants.NavigationConstants.quickAnimationDuration,
             ));
       } else {
         await _mapboxMap!.setCamera(cameraOptions);
@@ -284,7 +289,8 @@ class CameraController {
         await _mapboxMap!.flyTo(
             cameraOptions,
             MapAnimationOptions(
-              duration: nav_constants.NavigationConstants.quickAnimationDuration,
+              duration:
+                  nav_constants.NavigationConstants.quickAnimationDuration,
             ));
       } else {
         await _mapboxMap!.setCamera(cameraOptions);
@@ -376,22 +382,23 @@ class CameraController {
     // Enable navigation mode for 3D viewing
     _isNavigationMode = true;
     _isFollowingUser = true;
-    
+
     // Apply 3D camera settings as specified
     await _mapboxMap!.flyTo(
       CameraOptions(
-        center: Point(coordinates: Position(
+        center: Point(
+            coordinates: Position(
           userPosition.longitude,
           userPosition.latitude,
         )),
         anchor: ScreenCoordinate(x: 0, y: 0),
         zoom: 17,
         bearing: userBearing, // Use actual user bearing for rotation
-        pitch: 60,    // 3D tilt (0 is flat, 60 is looking ahead)
+        pitch: 60, // 3D tilt (0 is flat, 60 is looking ahead)
       ),
       MapAnimationOptions(duration: 2000, startDelay: 0),
     );
-    
+
     // Update internal state
     _currentZoom = 17;
     _currentPitch = 60;

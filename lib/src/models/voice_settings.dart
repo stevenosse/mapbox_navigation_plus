@@ -6,7 +6,7 @@ class VoiceSettings {
   /// Speech rate (0.3 to 1.0, where 0.5 is normal speed)
   final double speechRate;
 
-  /// Voice pitch (0.5 to 2.0, where 1.0 is normal pitch)  
+  /// Voice pitch (0.5 to 2.0, where 1.0 is normal pitch)
   final double pitch;
 
   /// Voice volume (0.0 to 1.0)
@@ -49,12 +49,16 @@ class VoiceSettings {
     return VoiceSettings(
       language: language ?? 'en-US',
       speechRate: 0.6,
-      announcementDistances: [1000.0, 500.0, 200.0], // Earlier warnings for high speed
+      announcementDistances: [
+        1000.0,
+        500.0,
+        200.0
+      ], // Earlier warnings for high speed
       minimumInterval: 15000, // Longer intervals for highway
     );
   }
 
-  /// Creates voice settings optimized for city driving  
+  /// Creates voice settings optimized for city driving
   factory VoiceSettings.city() {
     return const VoiceSettings(
       speechRate: 0.5,
@@ -82,20 +86,25 @@ class VoiceSettings {
       volume: volume ?? this.volume,
       language: language ?? this.language,
       minimumInterval: minimumInterval ?? this.minimumInterval,
-      announcementDistances: announcementDistances ?? this.announcementDistances,
+      announcementDistances:
+          announcementDistances ?? this.announcementDistances,
       announceArrival: announceArrival ?? this.announceArrival,
-      announceRouteRecalculation: announceRouteRecalculation ?? this.announceRouteRecalculation,
+      announceRouteRecalculation:
+          announceRouteRecalculation ?? this.announceRouteRecalculation,
     );
   }
 
   /// Validates that settings values are within acceptable ranges
   bool get isValid {
-    return speechRate >= 0.3 && speechRate <= 1.0 &&
-           pitch >= 0.5 && pitch <= 2.0 &&
-           volume >= 0.0 && volume <= 1.0 &&
-           minimumInterval >= 5000 && // At least 5 seconds
-           announcementDistances.isNotEmpty &&
-           announcementDistances.every((distance) => distance > 0);
+    return speechRate >= 0.3 &&
+        speechRate <= 1.0 &&
+        pitch >= 0.5 &&
+        pitch <= 2.0 &&
+        volume >= 0.0 &&
+        volume <= 1.0 &&
+        minimumInterval >= 5000 && // At least 5 seconds
+        announcementDistances.isNotEmpty &&
+        announcementDistances.every((distance) => distance > 0);
   }
 
   @override
@@ -107,15 +116,15 @@ class VoiceSettings {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is VoiceSettings &&
-           other.enabled == enabled &&
-           other.speechRate == speechRate &&
-           other.pitch == pitch &&
-           other.volume == volume &&
-           other.language == language &&
-           other.minimumInterval == minimumInterval &&
-           _listEquals(other.announcementDistances, announcementDistances) &&
-           other.announceArrival == announceArrival &&
-           other.announceRouteRecalculation == announceRouteRecalculation;
+        other.enabled == enabled &&
+        other.speechRate == speechRate &&
+        other.pitch == pitch &&
+        other.volume == volume &&
+        other.language == language &&
+        other.minimumInterval == minimumInterval &&
+        _listEquals(other.announcementDistances, announcementDistances) &&
+        other.announceArrival == announceArrival &&
+        other.announceRouteRecalculation == announceRouteRecalculation;
   }
 
   @override

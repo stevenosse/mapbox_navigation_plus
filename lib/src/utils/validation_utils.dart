@@ -5,10 +5,10 @@ import 'constants.dart';
 class ValidationUtils {
   /// Validates if coordinates are within valid ranges
   static bool isValidCoordinate(double latitude, double longitude) {
-    return latitude >= -90.0 && 
-           latitude <= 90.0 && 
-           longitude >= -180.0 && 
-           longitude <= 180.0;
+    return latitude >= -90.0 &&
+        latitude <= 90.0 &&
+        longitude >= -180.0 &&
+        longitude <= 180.0;
   }
 
   /// Validates if a waypoint has valid coordinates
@@ -24,14 +24,14 @@ class ValidationUtils {
 
   /// Validates if zoom level is within acceptable range
   static bool isValidZoom(double zoom) {
-    return zoom >= NavigationConstants.minZoom && 
-           zoom <= NavigationConstants.maxZoom;
+    return zoom >= NavigationConstants.minZoom &&
+        zoom <= NavigationConstants.maxZoom;
   }
 
   /// Validates if pitch is within acceptable range
   static bool isValidPitch(double pitch) {
-    return pitch >= NavigationConstants.minPitch && 
-           pitch <= NavigationConstants.maxPitch;
+    return pitch >= NavigationConstants.minPitch &&
+        pitch <= NavigationConstants.maxPitch;
   }
 
   /// Validates if bearing is within valid range (0-360 degrees)
@@ -77,7 +77,8 @@ class ValidationUtils {
   }
 
   /// Validates if two coordinates are different (not the same point)
-  static bool areCoordinatesDifferent(double lat1, double lon1, double lat2, double lon2) {
+  static bool areCoordinatesDifferent(
+      double lat1, double lon1, double lat2, double lon2) {
     const double tolerance = 0.000001; // ~0.1 meters
     return (lat1 - lat2).abs() > tolerance || (lon1 - lon2).abs() > tolerance;
   }

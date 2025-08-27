@@ -75,9 +75,9 @@ class RouteException extends NavigationException {
 
   factory RouteException.calculationFailed([String? details]) {
     return RouteException(
-      details != null 
-        ? '${NavigationConstants.routeCalculationFailed}: $details'
-        : NavigationConstants.routeCalculationFailed,
+      details != null
+          ? '${NavigationConstants.routeCalculationFailed}: $details'
+          : NavigationConstants.routeCalculationFailed,
       code: 'CALCULATION_FAILED',
     );
   }
@@ -138,7 +138,8 @@ class NavigationStateException extends NavigationException {
 /// Utility class for error handling
 class ErrorHandler {
   /// Handles location permission errors
-  static LocationException handleLocationPermission(LocationPermission permission) {
+  static LocationException handleLocationPermission(
+      LocationPermission permission) {
     switch (permission) {
       case LocationPermission.denied:
       case LocationPermission.deniedForever:
@@ -150,7 +151,8 @@ class ErrorHandler {
         );
       case LocationPermission.whileInUse:
       case LocationPermission.always:
-        throw ArgumentError('Permission is granted, should not handle as error');
+        throw ArgumentError(
+            'Permission is granted, should not handle as error');
     }
   }
 
@@ -162,7 +164,7 @@ class ErrorHandler {
     if (error is PermissionDeniedException) {
       return LocationException.permissionDenied();
     }
-    
+
     return LocationException(
       'Location error: ${error.toString()}',
       code: 'UNKNOWN_LOCATION_ERROR',
@@ -185,7 +187,7 @@ class ErrorHandler {
         originalError: error,
       );
     }
-    
+
     return RouteException(
       'Network error: ${error.toString()}',
       code: 'UNKNOWN_NETWORK_ERROR',
@@ -237,11 +239,11 @@ class ErrorHandler {
       rethrow; // Re-throw our custom exceptions
     } catch (error, stackTrace) {
       final contextMessage = context != null ? '$context: ' : '';
-      
+
       if (fallback != null && error is Exception) {
         return fallback(error);
       }
-      
+
       throw NavigationException(
         '$contextMessage${error.toString()}',
         code: 'EXECUTION_ERROR',
@@ -259,14 +261,14 @@ class ErrorHandler {
   }) {
     final contextPrefix = context != null ? '[$context] ' : '';
     final message = '$contextPrefix${error.toString()}';
-    
+
     if (logger != null) {
       logger(message);
     } else {
       // Default to print for now, can be replaced with proper logging
       debugPrint('NavigationError: $message');
     }
-    
+
     // Log stack trace if available
     if (error.stackTrace != null) {
       if (logger != null) {
