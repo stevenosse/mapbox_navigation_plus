@@ -15,6 +15,8 @@ export 'src/utils/error_handling.dart';
 export 'src/utils/formatting_utils.dart';
 export 'src/utils/maneuver_utils.dart';
 export 'src/utils/validation_utils.dart';
+export 'src/utils/coordinate_utils.dart';
+export 'src/utils/math_utils.dart';
 export 'src/models/voice_settings.dart';
 export 'src/localization/navigation_localizations.dart';
 export 'src/services/localized_voice_service.dart';

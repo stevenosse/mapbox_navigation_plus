@@ -12,6 +12,7 @@ import '../controllers/camera_controller.dart';
 import '../models/voice_settings.dart';
 import '../utils/constants.dart' as nav_constants;
 import '../utils/error_handling.dart';
+import '../utils/validation_utils.dart';
 
 /// Callback for creating localized navigation start announcement
 typedef NavigationStartBuilder = String Function(
@@ -133,6 +134,14 @@ class NavigationController {
     if (_currentState.status != NavigationStatus.idle) {
       throw NavigationStateException.alreadyStarted();
     }
+
+    // Validate input parameters
+    ValidationUtils.validateRouteRequest(
+      origin: origin,
+      destination: destination,
+      waypoints: stops,
+      profile: profile,
+    );
 
     await ErrorHandler.safeExecute(
       () async {
@@ -528,10 +537,16 @@ class NavigationController {
   }
 
   /// Disposes resources and closes streams
-  void dispose() {
-    _stopLocationTracking();
-    _voiceService?.dispose();
-    _stateController.close();
-    _stepController.close();
+  Future<void> dispose() async {
+    await _stopLocationTracking();
+    await _voiceService?.dispose();
+    
+    // Close stream controllers if not already closed
+    if (!_stateController.isClosed) {
+      await _stateController.close();
+    }
+    if (!_stepController.isClosed) {
+      await _stepController.close();
+    }
   }
 }

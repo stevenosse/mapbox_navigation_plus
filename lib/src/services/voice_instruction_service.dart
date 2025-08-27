@@ -8,9 +8,12 @@ import '../models/voice_settings.dart';
 import '../models/navigation_step.dart';
 import '../utils/voice_utils.dart';
 import '../utils/constants.dart' as nav_constants;
+import '../utils/logger.dart';
 
 /// Service for managing voice instructions during navigation
 class VoiceInstructionService {
+  static const Logger _logger = NavigationLoggers.voice;
+  
   FlutterTts? _tts;
   VoiceSettings _settings = VoiceSettings.defaults();
 
@@ -65,8 +68,10 @@ class VoiceInstructionService {
       _isInitialized = true;
       _startQueueProcessing();
 
+      _logger.info('Voice instruction service initialized successfully');
       return true;
     } catch (e) {
+      _logger.error('Failed to initialize voice service', e);
       _errorController.add(VoiceInstructionError(
         'Failed to initialize voice service: $e',
         VoiceErrorType.initialization,
@@ -154,6 +159,11 @@ class VoiceInstructionService {
     double? remainingDistance,
   }) async {
     if (!isEnabled) {
+      return;
+    }
+
+    // Don't queue new instructions if we're already speaking
+    if (_isSpeaking) {
       return;
     }
 
@@ -309,10 +319,16 @@ class VoiceInstructionService {
     _instructionQueue.add(instruction);
     _instructionQueue.sort((a, b) => b.priority.compareTo(a.priority));
 
-    // Mark distance as announced for this step
+    // Mark threshold as announced for this step 
     if (instruction.stepId != null && instruction.distance != null) {
       _announcedDistances.putIfAbsent(instruction.stepId!, () => <double>{});
-      _announcedDistances[instruction.stepId!]!.add(instruction.distance!);
+      // Find the closest threshold that this distance is within and mark it
+      for (final threshold in _settings.announcementDistances.reversed) {
+        if (instruction.distance! <= threshold) {
+          _announcedDistances[instruction.stepId!]!.add(threshold);
+          break; // Only add the smallest applicable threshold
+        }
+      }
     }
   }
 
@@ -410,18 +426,24 @@ class VoiceInstructionService {
   /// Disposes the service and cleans up resources
   Future<void> dispose() async {
     _queueProcessingTimer?.cancel();
+    _queueProcessingTimer = null;
 
     if (_tts != null) {
       await _stopCurrentInstruction();
-      // Note: FlutterTts doesn't have a dispose method, but we clear our reference
+      // Clear TTS reference
       _tts = null;
     }
 
     _clearQueue();
     _announcedDistances.clear();
 
-    await _instructionController.close();
-    await _errorController.close();
+    // Close streams if not already closed
+    if (!_instructionController.isClosed) {
+      await _instructionController.close();
+    }
+    if (!_errorController.isClosed) {
+      await _errorController.close();
+    }
 
     _isInitialized = false;
   }

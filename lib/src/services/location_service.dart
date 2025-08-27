@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import '../utils/constants.dart' as nav_constants;
 import '../utils/error_handling.dart';
+import '../utils/object_pool.dart';
+import '../utils/math_utils.dart';
 
 /// Service for handling location tracking and simulation
 class LocationService {
@@ -160,12 +162,7 @@ class LocationService {
     final nextPos = _simulationRoute![_simulationIndex + 1];
 
     // Calculate distance to next point
-    final distance = Geolocator.distanceBetween(
-      currentPos.latitude,
-      currentPos.longitude,
-      nextPos.latitude,
-      nextPos.longitude,
-    );
+    final distance = MathUtils.calculateDistanceBetweenPositions(currentPos, nextPos);
 
     // Calculate how far we should move in this update
     final moveDistance = _simulationSpeed *
@@ -184,14 +181,9 @@ class LocationService {
           (nextPos.longitude - currentPos.longitude) * ratio;
 
       // Calculate bearing for heading
-      final bearing = Geolocator.bearingBetween(
-        currentPos.latitude,
-        currentPos.longitude,
-        nextPos.latitude,
-        nextPos.longitude,
-      );
+      final bearing = MathUtils.calculateBearingBetweenPositions(currentPos, nextPos);
 
-      _currentSimulatedPosition = Position(
+      _currentSimulatedPosition = ObjectPools.positions.createPosition(
         latitude: newLat,
         longitude: newLng,
         timestamp: DateTime.now(),
@@ -291,28 +283,22 @@ class LocationService {
 
   /// Calculates distance between two positions
   static double calculateDistance(Position pos1, Position pos2) {
-    return Geolocator.distanceBetween(
-      pos1.latitude,
-      pos1.longitude,
-      pos2.latitude,
-      pos2.longitude,
-    );
+    return MathUtils.calculateDistanceBetweenPositions(pos1, pos2);
   }
 
   /// Calculates bearing between two positions
   static double calculateBearing(Position from, Position to) {
-    return Geolocator.bearingBetween(
-      from.latitude,
-      from.longitude,
-      to.latitude,
-      to.longitude,
-    );
+    return MathUtils.calculateBearingBetweenPositions(from, to);
   }
 
   /// Disposes of the service and cleans up resources
-  void dispose() {
+  Future<void> dispose() async {
     stopAll();
-    _positionController?.close();
+    
+    // Close position controller if not already closed
+    if (_positionController != null && !_positionController!.isClosed) {
+      await _positionController!.close();
+    }
     _positionController = null;
   }
 }

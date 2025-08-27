@@ -52,6 +52,7 @@ class NavigationConstants {
   static const String drivingProfile = 'driving';
   static const String walkingProfile = 'walking';
   static const String cyclingProfile = 'cycling';
+  static const String drivingTrafficProfile = 'driving-traffic';
 
   // Error messages
   static const String locationPermissionDenied = 'Location permission denied';

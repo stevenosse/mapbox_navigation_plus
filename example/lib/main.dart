@@ -3,7 +3,7 @@ import 'package:mapbox_navigation/mapbox_navigation.dart';
 import 'advanced_features_screen.dart';
 
 // Mapbox access token
-const String mapboxAccessToken = 'YOUR_MAPBOX_TOKEN_HERE';
+const String mapboxAccessToken = 'sk.eyJ1IjoiZGV2ZGV4IiwiYSI6ImNtZGE5YWJqMjBkcmoybXNnb2hsdmVqZjIifQ.WiC5INq79Gp_kB64W2HrMw';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

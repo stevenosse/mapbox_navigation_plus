@@ -7,10 +7,12 @@ import '../services/location_service.dart';
 import '../services/mapbox_directions_api.dart';
 import '../services/route_visualization_service.dart';
 import '../services/voice_instruction_service.dart';
+import '../services/navigation_service_factory.dart';
 import '../controllers/navigation_controller.dart';
 import '../controllers/camera_controller.dart';
 import '../models/voice_settings.dart';
 import '../utils/voice_utils.dart';
+import '../utils/logger.dart';
 import '../localization/navigation_localizations.dart';
 import 'navigation_instruction_widget.dart';
 import 'navigation_status_widget.dart';
@@ -130,6 +132,8 @@ class MapboxNavigationView extends StatefulWidget {
 }
 
 class _MapboxNavigationViewState extends State<MapboxNavigationView> {
+  static const Logger _logger = NavigationLoggers.general;
+  
   MapboxMap? _mapboxMap;
   LocationService? _locationService;
   MapboxDirectionsAPI? _directionsAPI;
@@ -141,6 +145,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   NavigationState _currentState = NavigationState.idle();
   NavigationStep? _currentStep;
+  bool _isVoiceEnabled = false;
 
   @override
   void initState() {
@@ -152,26 +157,31 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   @override
   void dispose() {
-    _navigationController?.dispose();
-    _locationService?.dispose();
-    _routeVisualizationService?.dispose();
-    _voiceService?.dispose();
+    // Dispose services asynchronously (best effort)
+    _navigationController?.dispose().catchError((_) {});
+    _locationService?.dispose().catchError((_) {});
+    _directionsAPI?.dispose();
+    _routeVisualizationService?.dispose().catchError((_) {});
+    _voiceService?.dispose().catchError((_) {});
     if (widget.overlayController == null) {
       _overlayController.dispose();
     }
     super.dispose();
   }
 
-  /// Initializes all navigation services
+  /// Initializes all navigation services using factory
   void _initializeServices() {
-    _locationService = LocationService();
-    _directionsAPI = MapboxDirectionsAPI(
-        accessToken: widget.accessToken, language: widget.language);
+    _locationService = NavigationServiceFactory.createLocationService();
+    _directionsAPI = NavigationServiceFactory.createDirectionsAPI(
+      accessToken: widget.accessToken,
+      language: widget.language,
+    );
 
     // Initialize voice service if settings are provided
     if (widget.voiceSettings != null) {
-      _voiceService = VoiceInstructionService()
+      _voiceService = NavigationServiceFactory.createVoiceService()
         ..initialize(widget.voiceSettings!);
+      _isVoiceEnabled = widget.voiceSettings!.enabled;
     }
   }
 
@@ -179,13 +189,13 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   Future<void> _initializeControllers() async {
     if (_mapboxMap == null) return;
 
-    _cameraController = CameraController();
+    _cameraController = NavigationServiceFactory.createCameraController();
     _cameraController!.initialize(_mapboxMap!);
 
-    _routeVisualizationService = RouteVisualizationService();
+    _routeVisualizationService = NavigationServiceFactory.createRouteVisualizationService();
     await _routeVisualizationService!.initialize(_mapboxMap!);
 
-    _navigationController = NavigationController(
+    _navigationController = NavigationServiceFactory.createNavigationController(
       locationService: _locationService!,
       directionsAPI: _directionsAPI!,
       cameraController: _cameraController!,
@@ -420,9 +430,12 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
               NavigationControlsWidget(
                 navigationController: _navigationController,
                 voiceService: _voiceService,
-                isVoiceEnabled: _voiceService?.isEnabled ?? false,
+                isVoiceEnabled: _isVoiceEnabled,
                 style: widget.navigationControlsStyle,
                 onVoiceToggle: (enabled) {
+                  setState(() {
+                    _isVoiceEnabled = enabled;
+                  });
                   _navigationController?.setVoiceEnabled(enabled);
                 },
                 onZoomIn: () {
@@ -434,7 +447,10 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
                   _cameraController?.setZoom(currentZoom - 1.0);
                 },
                 onRecalculateRoute: () {
-                  _navigationController?.recalculateRoute();
+                  final currentPosition = _currentState.currentPosition?.toPosition();
+                  _navigationController?.recalculateRoute(
+                    currentPosition: currentPosition,
+                  );
                 },
               ),
           position: OverlayPosition.centerRight,
@@ -473,9 +489,12 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
               NavigationControlsWidget(
                 navigationController: _navigationController,
                 voiceService: _voiceService,
-                isVoiceEnabled: _voiceService?.isEnabled ?? false,
+                isVoiceEnabled: _isVoiceEnabled,
                 style: widget.navigationControlsStyle,
                 onVoiceToggle: (enabled) {
+                  setState(() {
+                    _isVoiceEnabled = enabled;
+                  });
                   _navigationController?.setVoiceEnabled(enabled);
                 },
                 onZoomIn: () {
@@ -487,7 +506,10 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
                   _cameraController?.setZoom(currentZoom - 1.0);
                 },
                 onRecalculateRoute: () {
-                  _navigationController?.recalculateRoute();
+                  final currentPosition = _currentState.currentPosition?.toPosition();
+                  _navigationController?.recalculateRoute(
+                    currentPosition: currentPosition,
+                  );
                 },
               ),
         );
@@ -582,7 +604,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           .load('packages/mapbox_navigation/assets/location-puck.png');
       customLocationPuckBytes = data.buffer.asUint8List();
     } catch (e) {
-      debugPrint('Failed to create custom location puck: $e');
+      _logger.warning('Failed to load custom location puck', e);
     }
 
     final locationPuck = LocationPuck(

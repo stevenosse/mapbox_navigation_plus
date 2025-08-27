@@ -61,9 +61,16 @@ class ValidationUtils {
 
   /// Validates if Mapbox access token format is correct
   static bool isValidMapboxToken(String token) {
-    if (token.isEmpty) return false;
+    if (token.isEmpty || token.length < 10) return false;
     // Mapbox tokens typically start with 'pk.' or 'sk.'
     return token.startsWith('pk.') || token.startsWith('sk.');
+  }
+
+  /// Throws ArgumentError if token is invalid
+  static void validateMapboxToken(String token) {
+    if (!isValidMapboxToken(token)) {
+      throw ArgumentError('Invalid Mapbox access token format. Must start with pk. or sk. and be at least 10 characters long.');
+    }
   }
 
   /// Validates if a string is not null or empty
@@ -89,6 +96,7 @@ class ValidationUtils {
       NavigationConstants.drivingProfile,
       NavigationConstants.walkingProfile,
       NavigationConstants.cyclingProfile,
+      NavigationConstants.drivingTrafficProfile,
     ];
     return validProfiles.contains(profile);
   }
@@ -101,5 +109,49 @@ class ValidationUtils {
   /// Validates if animation duration is reasonable
   static bool isValidAnimationDuration(int duration) {
     return duration >= 0 && duration <= 10000; // Max 10 seconds
+  }
+
+  /// Validates coordinates and throws ArgumentError if invalid
+  static void validateCoordinates(double latitude, double longitude, {String? context}) {
+    if (!isValidCoordinate(latitude, longitude)) {
+      throw ArgumentError(
+        'Invalid coordinates: lat=$latitude, lng=$longitude. '
+        'Latitude must be between -90 and 90, longitude between -180 and 180.'
+        '${context != null ? ' Context: $context' : ''}',
+      );
+    }
+  }
+
+  /// Validates waypoint and throws ArgumentError if invalid
+  static void validateWaypoint(Waypoint waypoint, {String? context}) {
+    validateCoordinates(waypoint.latitude, waypoint.longitude, context: context);
+  }
+
+  /// Validates route parameters
+  static void validateRouteRequest({
+    required Waypoint origin,
+    required Waypoint destination,
+    List<Waypoint>? waypoints,
+    String? profile,
+  }) {
+    validateWaypoint(origin, context: 'origin');
+    validateWaypoint(destination, context: 'destination');
+    
+    if (!areCoordinatesDifferent(
+      origin.latitude, origin.longitude,
+      destination.latitude, destination.longitude,
+    )) {
+      throw ArgumentError('Origin and destination must be different locations');
+    }
+
+    if (waypoints != null) {
+      for (int i = 0; i < waypoints.length; i++) {
+        validateWaypoint(waypoints[i], context: 'waypoint[$i]');
+      }
+    }
+
+    if (profile != null && !isValidRouteProfile(profile)) {
+      throw ArgumentError('Invalid route profile: $profile');
+    }
   }
 }

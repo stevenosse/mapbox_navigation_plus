@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'constants.dart';
+import 'logger.dart';
 
 /// Custom exceptions for the navigation package
 class NavigationException implements Exception {
@@ -135,6 +135,87 @@ class NavigationStateException extends NavigationException {
   }
 }
 
+/// Voice instruction exceptions
+class VoiceException extends NavigationException {
+  const VoiceException(
+    super.message, {
+    super.code,
+    super.originalError,
+    super.stackTrace,
+  });
+
+  factory VoiceException.initializationFailed([String? details]) {
+    return VoiceException(
+      details != null 
+        ? 'Voice service initialization failed: $details'
+        : 'Voice service initialization failed',
+      code: 'VOICE_INIT_FAILED',
+    );
+  }
+
+  factory VoiceException.ttsNotAvailable() {
+    return const VoiceException(
+      'Text-to-speech service is not available',
+      code: 'TTS_UNAVAILABLE',
+    );
+  }
+
+  factory VoiceException.speakingFailed(String text) {
+    return VoiceException(
+      'Failed to speak instruction: $text',
+      code: 'SPEAKING_FAILED',
+    );
+  }
+}
+
+/// Camera control exceptions
+class CameraException extends NavigationException {
+  const CameraException(
+    super.message, {
+    super.code,
+    super.originalError,
+    super.stackTrace,
+  });
+
+  factory CameraException.notInitialized() {
+    return const CameraException(
+      'Camera controller not initialized',
+      code: 'NOT_INITIALIZED',
+    );
+  }
+
+  factory CameraException.animationFailed() {
+    return const CameraException(
+      'Camera animation failed',
+      code: 'ANIMATION_FAILED',
+    );
+  }
+}
+
+/// Validation exceptions
+class ValidationException extends NavigationException {
+  const ValidationException(
+    super.message, {
+    super.code,
+    super.originalError,
+    super.stackTrace,
+  });
+
+  factory ValidationException.invalidInput(String field, String value) {
+    return ValidationException(
+      'Invalid $field: $value',
+      code: 'INVALID_INPUT',
+    );
+  }
+
+  factory ValidationException.required(String field) {
+    return ValidationException(
+      'Required field missing: $field',
+      code: 'REQUIRED_FIELD',
+    );
+  }
+}
+
 /// Utility class for error handling
 class ErrorHandler {
   /// Handles location permission errors
@@ -253,29 +334,30 @@ class ErrorHandler {
     }
   }
 
-  /// Logs errors in a consistent format
+  /// Logs errors in a consistent format using the logging framework
   static void logError(
     NavigationException error, {
     String? context,
-    void Function(String message)? logger,
+    Logger? logger,
   }) {
+    final effectiveLogger = logger ?? NavigationLoggers.general;
     final contextPrefix = context != null ? '[$context] ' : '';
-    final message = '$contextPrefix${error.toString()}';
+    final message = '$contextPrefix${error.message}';
 
-    if (logger != null) {
-      logger(message);
-    } else {
-      // Default to print for now, can be replaced with proper logging
-      debugPrint('NavigationError: $message');
-    }
+    effectiveLogger.error(message, error.originalError, error.stackTrace);
+  }
 
-    // Log stack trace if available
-    if (error.stackTrace != null) {
-      if (logger != null) {
-        logger('Stack trace: ${error.stackTrace}');
-      } else {
-        debugPrint('Stack trace: ${error.stackTrace}');
-      }
-    }
+  /// Logs warnings using the logging framework
+  static void logWarning(
+    String message, {
+    String? context,
+    Logger? logger,
+    Object? error,
+  }) {
+    final effectiveLogger = logger ?? NavigationLoggers.general;
+    final contextPrefix = context != null ? '[$context] ' : '';
+    final fullMessage = '$contextPrefix$message';
+
+    effectiveLogger.warning(fullMessage, error);
   }
 }

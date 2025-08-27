@@ -5,6 +5,8 @@ import '../models/route_data.dart';
 import '../models/waypoint.dart';
 import '../utils/constants.dart' as nav_constants;
 import '../utils/error_handling.dart';
+import '../utils/validation_utils.dart';
+import '../utils/retry_utils.dart';
 
 /// Service for interacting with Mapbox Directions API
 class MapboxDirectionsAPI {
@@ -13,6 +15,7 @@ class MapboxDirectionsAPI {
   final String _accessToken;
   final http.Client _httpClient;
   final String _language;
+  final bool _ownsHttpClient;
 
   MapboxDirectionsAPI({
     required String accessToken,
@@ -20,8 +23,9 @@ class MapboxDirectionsAPI {
     String language = 'en',
   })  : _accessToken = accessToken,
         _httpClient = httpClient ?? http.Client(),
-        _language = language {
-    ErrorHandler.validateMapboxToken(_accessToken);
+        _language = language,
+        _ownsHttpClient = httpClient == null {
+    ValidationUtils.validateMapboxToken(_accessToken);
   }
 
   /// Fetches a route from origin to destination using Waypoint objects
@@ -44,6 +48,13 @@ class MapboxDirectionsAPI {
     String? language,
     bool includeTrafficData = false,
   }) async {
+    // Validate input parameters
+    ValidationUtils.validateRouteRequest(
+      origin: origin,
+      destination: destination,
+      waypoints: waypoints,
+      profile: profile,
+    );
     return getRoute(
       origin: origin.toPosition(),
       destination: destination.toPosition(),
@@ -78,6 +89,30 @@ class MapboxDirectionsAPI {
     String? language,
     bool includeTrafficData = false,
   }) async {
+    // Validate input parameters
+    ValidationUtils.validateCoordinates(origin.latitude, origin.longitude, context: 'origin');
+    ValidationUtils.validateCoordinates(destination.latitude, destination.longitude, context: 'destination');
+    
+    if (!ValidationUtils.areCoordinatesDifferent(
+      origin.latitude, origin.longitude,
+      destination.latitude, destination.longitude,
+    )) {
+      throw ArgumentError('Origin and destination must be different locations');
+    }
+
+    if (waypoints != null) {
+      for (int i = 0; i < waypoints.length; i++) {
+        ValidationUtils.validateCoordinates(
+          waypoints[i].latitude, waypoints[i].longitude, 
+          context: 'waypoint[$i]'
+        );
+      }
+    }
+
+    if (!ValidationUtils.isValidRouteProfile(profile)) {
+      throw ArgumentError('Invalid route profile: $profile');
+    }
+
     try {
       // Build coordinates string
       final coordinates = <String>[];
@@ -123,8 +158,21 @@ class MapboxDirectionsAPI {
               '${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
           .replace(queryParameters: queryParams);
 
-      // Make HTTP request
-      final response = await _httpClient.get(uri);
+      // Make HTTP request with retry logic
+      final response = await RetryUtils.executeWithRetry(
+        () => _httpClient.get(uri),
+        maxRetries: 3,
+        retryWhen: (error) {
+          // Retry on network errors and 5xx server errors
+          final errorString = error.toString().toLowerCase();
+          return errorString.contains('timeout') ||
+              errorString.contains('connection') ||
+              errorString.contains('500') ||
+              errorString.contains('502') ||
+              errorString.contains('503') ||
+              errorString.contains('504');
+        },
+      );
 
       if (response.statusCode != 200) {
         throw RouteException.apiError(response.statusCode, response.body);
@@ -239,7 +287,19 @@ class MapboxDirectionsAPI {
               '${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
           .replace(queryParameters: queryParams);
 
-      final response = await _httpClient.get(uri);
+      final response = await RetryUtils.executeWithRetry(
+        () => _httpClient.get(uri),
+        maxRetries: 3,
+        retryWhen: (error) {
+          final errorString = error.toString().toLowerCase();
+          return errorString.contains('timeout') ||
+              errorString.contains('connection') ||
+              errorString.contains('500') ||
+              errorString.contains('502') ||
+              errorString.contains('503') ||
+              errorString.contains('504');
+        },
+      );
 
       if (response.statusCode != 200) {
         throw RouteException.apiError(response.statusCode, response.body);
@@ -333,9 +393,11 @@ class MapboxDirectionsAPI {
     );
   }
 
-  /// Disposes of the HTTP client
+  /// Disposes of the HTTP client (only if we own it)
   void dispose() {
-    _httpClient.close();
+    if (_ownsHttpClient) {
+      _httpClient.close();
+    }
   }
 }
 

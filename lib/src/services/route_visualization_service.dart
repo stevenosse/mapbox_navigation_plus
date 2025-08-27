@@ -6,6 +6,7 @@ import '../models/route_data.dart';
 import '../models/waypoint.dart';
 import '../utils/route_utils.dart';
 import '../utils/constants.dart' as nav_constants;
+import '../utils/math_utils.dart';
 
 /// Service for drawing and managing route visualization on Mapbox map
 class RouteVisualizationService {
@@ -16,6 +17,11 @@ class RouteVisualizationService {
   MapboxMap? _mapboxMap;
   RouteData? _currentRoute;
   bool _isInitialized = false;
+  
+  // Cache for optimization
+  Map<String, dynamic>? _cachedFullRouteGeoJson;
+  int? _lastStepIndex;
+  String? _lastRouteHash;
 
   /// Initializes the service with a Mapbox map instance
   Future<void> initialize(MapboxMap mapboxMap) async {
@@ -30,32 +36,30 @@ class RouteVisualizationService {
     if (!_isInitialized || _mapboxMap == null) return;
 
     try {
+      final routeHash = _generateRouteHash(route);
+      final bool isNewRoute = _lastRouteHash != routeHash;
+
       _currentRoute = route;
+      _lastRouteHash = routeHash;
 
-      // Convert route to GeoJSON with traffic data
-      final routeGeoJsonString = RouteUtils.routeToGeoJson(route);
-      final routeGeoJson = json.decode(routeGeoJsonString);
+      // Only regenerate full route GeoJSON if route changed
+      if (isNewRoute || _cachedFullRouteGeoJson == null) {
+        final routeGeoJsonString = RouteUtils.routeToGeoJson(route);
+        _cachedFullRouteGeoJson = json.decode(routeGeoJsonString);
+        
+        // Update the full route source (for traveled portion)
+        await _mapboxMap!.style.setStyleSourceProperty(
+          _routeSourceId,
+          'data',
+          _cachedFullRouteGeoJson!,
+        );
 
-      // Update the full route source (for traveled portion)
-      await _mapboxMap!.style.setStyleSourceProperty(
-        _routeSourceId,
-        'data',
-        routeGeoJson,
-      );
+        // Update layer styling based on traffic data for new routes
+        await _updateRouteLayerStyling(route);
+      }
 
-      // Create remaining route geometry based on current position or step progress
-      final remainingRouteGeoJson = _createRemainingRouteGeoJson(
-          route, currentStepIndex, currentPosition);
-
-      // Update the remaining route source
-      await _mapboxMap!.style.setStyleSourceProperty(
-        '$_routeSourceId-remaining',
-        'data',
-        remainingRouteGeoJson,
-      );
-
-      // Update layer styling based on traffic data
-      await _updateRouteLayerStyling(route);
+      // Always update remaining route (this changes frequently during navigation)
+      await _updateRemainingRoute(route, currentStepIndex, currentPosition);
     } catch (e) {
       throw RouteVisualizationException('Failed to draw route: $e');
     }
@@ -67,18 +71,42 @@ class RouteVisualizationService {
     if (!_isInitialized || _mapboxMap == null) return;
 
     try {
-      // Update only the remaining route portion for better performance
-      final remainingRouteGeoJson = _createRemainingRouteGeoJson(
-          route, currentStepIndex, currentPosition);
-
-      await _mapboxMap!.style.setStyleSourceProperty(
-        '$_routeSourceId-remaining',
-        'data',
-        remainingRouteGeoJson,
-      );
+      await _updateRemainingRoute(route, currentStepIndex, currentPosition);
     } catch (e) {
       throw RouteVisualizationException('Failed to update route progress: $e');
     }
+  }
+
+  /// Helper method to update remaining route with caching
+  Future<void> _updateRemainingRoute(RouteData route, int? currentStepIndex,
+      geo.Position? currentPosition) async {
+    // Skip update if step hasn't changed and position is close to last cached position
+    if (_shouldSkipRemainingRouteUpdate(currentStepIndex, currentPosition)) {
+      return;
+    }
+
+    final remainingRouteGeoJson = _createRemainingRouteGeoJson(
+        route, currentStepIndex, currentPosition);
+
+    _lastStepIndex = currentStepIndex;
+
+    await _mapboxMap!.style.setStyleSourceProperty(
+      '$_routeSourceId-remaining',
+      'data',
+      remainingRouteGeoJson,
+    );
+  }
+
+  /// Determines if remaining route update can be skipped
+  bool _shouldSkipRemainingRouteUpdate(int? currentStepIndex, geo.Position? currentPosition) {
+    // Always update if no cache or step changed significantly
+    if (_lastStepIndex == null || currentStepIndex != _lastStepIndex) {
+      return false;
+    }
+
+    // For now, don't skip - in a more advanced implementation,
+    // we could check if the position moved less than a threshold
+    return false;
   }
 
   /// Creates GeoJSON for the remaining portion of the route
@@ -150,7 +178,7 @@ class RouteVisualizationService {
 
     for (int i = 0; i < geometry.length; i++) {
       final waypoint = geometry[i];
-      final distance = _calculateDistance(
+      final distance = MathUtils.calculateDistance(
         waypoint.latitude,
         waypoint.longitude,
         targetPosition.latitude,
@@ -166,24 +194,6 @@ class RouteVisualizationService {
     return closestIndex;
   }
 
-  /// Simple distance calculation between two points (Haversine formula)
-  double _calculateDistance(
-      double lat1, double lon1, double lat2, double lon2) {
-    const double earthRadius = 6371000; // Earth's radius in meters
-
-    final double dLat = (lat2 - lat1) * (3.14159265359 / 180);
-    final double dLon = (lon2 - lon1) * (3.14159265359 / 180);
-
-    final double a = (dLat / 2) * (dLat / 2) +
-        (lat1 * (3.14159265359 / 180)) *
-            (lat2 * (3.14159265359 / 180)) *
-            (dLon / 2) *
-            (dLon / 2);
-
-    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-    return earthRadius * c;
-  }
 
   /// Clears the current route from the map
   Future<void> clearRoute() async {
@@ -432,11 +442,40 @@ class RouteVisualizationService {
     return '#${colorInt.toRadixString(16).padLeft(8, '0').substring(2)}';
   }
 
+  /// Generates a hash for route to detect changes
+  String _generateRouteHash(RouteData route) {
+    // Simple hash based on route geometry and traffic data
+    final buffer = StringBuffer();
+    buffer.write('${route.totalDistance}_${route.totalDuration}');
+    
+    // Add first few and last few geometry points
+    if (route.geometry.isNotEmpty) {
+      final geometryToHash = [
+        ...route.geometry.take(3),
+        ...route.geometry.skip(max(0, route.geometry.length - 3)),
+      ];
+      
+      for (final point in geometryToHash) {
+        buffer.write('_${point.latitude.toStringAsFixed(6)}_${point.longitude.toStringAsFixed(6)}');
+      }
+    }
+
+    return buffer.toString().hashCode.toString();
+  }
+
+  /// Clears cache
+  void _clearCache() {
+    _cachedFullRouteGeoJson = null;
+    _lastStepIndex = null;
+    _lastRouteHash = null;
+  }
+
   /// Disposes of the service and cleans up resources
   Future<void> dispose() async {
     if (_isInitialized && _mapboxMap != null) {
       await clearRoute();
     }
+    _clearCache();
     _mapboxMap = null;
     _currentRoute = null;
     _isInitialized = false;
