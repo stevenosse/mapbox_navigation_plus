@@ -18,3 +18,5 @@ export 'src/utils/validation_utils.dart';
 export 'src/models/voice_settings.dart';
 export 'src/localization/navigation_localizations.dart';
 export 'src/services/localized_voice_service.dart';
+export 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
+    show CameraOptions, Point, Position, MapboxStyles, MapboxOptions;

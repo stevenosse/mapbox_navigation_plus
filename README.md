@@ -2,6 +2,8 @@
 
 A minimal, lightweight Flutter package that provides 3D turn-by-turn navigation using Mapbox APIs. This package offers a clean, dependency-minimal approach to navigation with an FPS-style dynamic camera and comprehensive customization options.
 
+<img src="screenshot.png" alt="Mapbox Navigation Screenshot" width="300" height="auto">
+
 ## Features
 
 ### Core navigation
@@ -10,6 +12,7 @@ A minimal, lightweight Flutter package that provides 3D turn-by-turn navigation 
 - **Route Calculation**: Powered by Mapbox Directions API with support for multiple profiles
 - **Real-time Location Tracking**: GPS-based location services with simulation support for testing
 - **Route Visualization**: Beautiful route rendering on the map with traffic data support
+- Fully compatible with Mapbox Maps Flutter SDK
 
 ### Advanced features
 - **Voice Instructions**: Text-to-speech navigation announcements with customizable settings
@@ -221,6 +224,18 @@ MapboxNavigationView(
     enabled: true,
     language: 'es-ES', // Spanish voice
   ),
+)
+```
+
+Important: You need to add add the `NavigationLocalizations.delegate` to your `MaterialApp`'s `localizationsDelegates` list.
+
+```dart
+MaterialApp(
+  localizationsDelegates: [
+    NavigationLocalizations.delegate,
+    // ... other delegates
+  ],
+  // ... other properties
 )
 ```
 

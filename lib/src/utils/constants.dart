@@ -77,19 +77,6 @@ class NavigationColors {
   static const arrivedColor = 0xFF2196F3; // Blue
   static const errorColor = 0xFFF44336; // Red
 }
-
-/// Map style URIs
-class MapboxStyles {
-  static const String streets = 'mapbox://styles/mapbox/streets-v12';
-  static const String outdoors = 'mapbox://styles/mapbox/outdoors-v12';
-  static const String light = 'mapbox://styles/mapbox/light-v11';
-  static const String dark = 'mapbox://styles/mapbox/dark-v11';
-  static const String satellite = 'mapbox://styles/mapbox/satellite-v9';
-  static const String satelliteStreets = 'mapbox://styles/mapbox/satellite-streets-v12';
-  static const String navigation = 'mapbox://styles/mapbox/navigation-day-v1';
-  static const String navigationNight = 'mapbox://styles/mapbox/navigation-night-v1';
-}
-
 /// Route visualization constants
 class RouteVisualizationConstants {
   // Route line styling
