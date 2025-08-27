@@ -190,7 +190,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       directionsAPI: _directionsAPI!,
       cameraController: _cameraController!,
       voiceService: _voiceService,
-      voiceInstructionBuilder: _createLocalizedVoiceInstruction,
       navigationStartBuilder: _createLocalizedNavigationStart,
       arrivalAnnouncementBuilder: _createLocalizedArrival,
     );
@@ -378,37 +377,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   /// Get all current overlays
   List<OverlayConfig> get allOverlays => _overlayController.overlays;
-
-  /// Creates localized voice instruction for the navigation controller
-  String _createLocalizedVoiceInstruction({
-    required String baseInstruction,
-    required double remainingDistance,
-    String? maneuverType,
-  }) {
-    final localizations = Localizations.of(context, NavigationLocalizations);
-
-    return VoiceUtils.createVoiceInstruction(
-      baseInstruction: baseInstruction,
-      remainingDistance: remainingDistance,
-      maneuverType: maneuverType,
-      // Pass localized strings or fallback to English
-      turnLeftNow: localizations?.turnLeftNow ?? 'Turn left now',
-      turnRightNow: localizations?.turnRightNow ?? 'Turn right now',
-      mergeNow: localizations?.mergeNow ?? 'Merge now',
-      takeTheExit: localizations?.takeTheExit ?? 'Take the exit now',
-      enterRoundabout: localizations?.enterRoundabout ?? 'Enter the roundabout',
-      prepareToTurnLeft:
-          localizations?.prepareToTurnLeft ?? 'Prepare to turn left',
-      prepareToTurnRight:
-          localizations?.prepareToTurnRight ?? 'Prepare to turn right',
-      prepareToMerge: localizations?.prepareToMerge ?? 'Prepare to merge',
-      prepareToExit: localizations?.prepareToExit ?? 'Prepare to exit',
-      prepareToEnterRoundabout: localizations?.prepareToEnterRoundabout ??
-          'Prepare to enter the roundabout',
-      prepareTo: localizations?.prepareTo ?? 'Prepare to',
-      inDistance: localizations?.inDistance ?? 'In',
-    );
-  }
 
   /// Creates localized navigation start announcement
   String _createLocalizedNavigationStart(

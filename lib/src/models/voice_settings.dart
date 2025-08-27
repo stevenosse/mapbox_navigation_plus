@@ -33,8 +33,8 @@ class VoiceSettings {
     this.pitch = 1.0,
     this.volume = 1.0,
     this.language = 'en-US',
-    this.minimumInterval = 10000, // 10 seconds
-    this.announcementDistances = const [500.0, 200.0, 50.0],
+    this.minimumInterval = 20000, // 20 seconds
+    this.announcementDistances = const [800.0, 300.0, 100.0],
     this.announceArrival = true,
     this.announceRouteRecalculation = true,
   });
@@ -54,7 +54,7 @@ class VoiceSettings {
         500.0,
         200.0
       ], // Earlier warnings for high speed
-      minimumInterval: 15000, // Longer intervals for highway
+      minimumInterval: 25000, // Longer intervals for highway
     );
   }
 
@@ -62,8 +62,8 @@ class VoiceSettings {
   factory VoiceSettings.city() {
     return const VoiceSettings(
       speechRate: 0.5,
-      announcementDistances: [300.0, 100.0, 30.0], // Shorter warnings for city
-      minimumInterval: 8000, // More frequent updates in city
+      announcementDistances: [400.0, 150.0], // Fewer city announcements
+      minimumInterval: 15000, // Less frequent updates in city
     );
   }
 

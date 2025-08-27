@@ -13,13 +13,6 @@ import '../models/voice_settings.dart';
 import '../utils/constants.dart' as nav_constants;
 import '../utils/error_handling.dart';
 
-/// Callback for creating localized voice instructions
-typedef VoiceInstructionBuilder = String Function({
-  required String baseInstruction,
-  required double remainingDistance,
-  String? maneuverType,
-});
-
 /// Callback for creating localized navigation start announcement
 typedef NavigationStartBuilder = String Function(
     {String? destinationName, double? totalDistance});
@@ -33,7 +26,7 @@ class NavigationController {
   final MapboxDirectionsAPI _directionsAPI;
   final CameraController _cameraController;
   final VoiceInstructionService? _voiceService;
-  final VoiceInstructionBuilder? _voiceInstructionBuilder;
+
   final NavigationStartBuilder? _navigationStartBuilder;
   final ArrivalAnnouncementBuilder? _arrivalAnnouncementBuilder;
 
@@ -61,14 +54,13 @@ class NavigationController {
     required MapboxDirectionsAPI directionsAPI,
     required CameraController cameraController,
     VoiceInstructionService? voiceService,
-    VoiceInstructionBuilder? voiceInstructionBuilder,
+
     NavigationStartBuilder? navigationStartBuilder,
     ArrivalAnnouncementBuilder? arrivalAnnouncementBuilder,
   })  : _locationService = locationService,
         _directionsAPI = directionsAPI,
         _cameraController = cameraController,
         _voiceService = voiceService,
-        _voiceInstructionBuilder = voiceInstructionBuilder,
         _navigationStartBuilder = navigationStartBuilder,
         _arrivalAnnouncementBuilder = arrivalAnnouncementBuilder;
 
@@ -435,25 +427,12 @@ class NavigationController {
       return;
     }
 
-    // Announce step with localized instructions
+    // Announce step
     if (_voiceService != null && _voiceService!.isEnabled) {
-      if (_voiceInstructionBuilder != null) {
-        // Use localized voice instruction builder
-        final remainingDistance = currentStep.getRemainingDistance(position);
-        final localizedInstruction = _voiceInstructionBuilder!(
-          baseInstruction: currentStep.instruction,
-          remainingDistance: remainingDistance,
-          maneuverType: currentStep.maneuver,
-        );
-
-        await _voiceService!.testAnnouncement(localizedInstruction);
-      } else {
-        // Fallback to default announceStep
-        await _voiceService!.announceStep(
-          step: currentStep,
-          currentPosition: position,
-        );
-      }
+      await _voiceService!.announceStep(
+        step: currentStep,
+        currentPosition: position,
+      );
     }
 
     // Update navigation progress
