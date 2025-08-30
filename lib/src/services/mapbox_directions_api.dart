@@ -52,18 +52,94 @@ class MapboxDirectionsAPI {
       waypoints: waypoints,
       profile: profile,
     );
-    return getRoute(
-      origin: origin,
-      destination: destination,
-      waypoints: waypoints,
-      profile: profile,
-      alternatives: alternatives,
-      steps: steps,
-      geometries: geometries,
-      overview: overview,
-      language: language ?? _language,
-      includeTrafficData: includeTrafficData,
-    );
+    
+    try {
+      // Build coordinates string
+      final coordinates = <String>[];
+
+      coordinates.add('${origin.longitude},${origin.latitude}');
+
+      if (waypoints != null) {
+        for (final waypoint in waypoints) {
+          coordinates.add('${waypoint.longitude},${waypoint.latitude}');
+        }
+      }
+
+      coordinates.add('${destination.longitude},${destination.latitude}');
+
+      final coordinatesString = coordinates.join(';');
+
+      // Automatically use driving-traffic profile if traffic data is requested
+      if (includeTrafficData && profile == 'driving') {
+        profile = 'driving-traffic';
+      }
+
+      // Build query parameters
+      final queryParams = {
+        'access_token': _accessToken,
+        'alternatives': alternatives.toString(),
+        'steps': steps.toString(),
+        'geometries': geometries,
+        'overview': overview ? 'full' : 'false',
+        'language': language ?? _language,
+      };
+
+      // Add traffic annotations if requested and profile supports it
+      if (includeTrafficData && profile.contains('traffic')) {
+        queryParams['annotations'] =
+            'congestion,congestion_numeric,speed,distance,duration';
+      }
+
+      final uri = Uri.parse(
+              '${nav_constants.NavigationConstants.mapboxDirectionsBaseUrl}/$profile/$coordinatesString')
+          .replace(queryParameters: queryParams);
+
+      final response = await RetryUtils.executeWithRetry(
+        () => _httpClient.get(uri),
+        maxRetries: 3,
+        retryWhen: (error) {
+          final errorString = error.toString().toLowerCase();
+          return errorString.contains('timeout') ||
+              errorString.contains('connection') ||
+              errorString.contains('500') ||
+              errorString.contains('502') ||
+              errorString.contains('503') ||
+              errorString.contains('504');
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw RouteException.apiError(response.statusCode, response.body);
+      }
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+
+      if (data['code'] != 'Ok') {
+        throw RouteException.apiError(
+          response.statusCode,
+          data['message'] as String? ?? 'Unknown API error',
+        );
+      }
+
+      final routes = data['routes'] as List<dynamic>;
+      
+      if (routes.isEmpty) {
+        throw RouteException.noRouteFound();
+      }
+
+      return RouteData.fromMapboxResponse(
+        routes.first as Map<String, dynamic>,
+        origin,
+        destination,
+        waypoints: waypoints,
+        profile: profile,
+      );
+    } catch (e) {
+      if (e is RouteException) {
+        rethrow;
+      }
+      throw ErrorHandler.handleHttpException(e as Exception);
+    }
   }
 
   /// Fetches multiple alternative routes using Position objects (backward compatibility)
