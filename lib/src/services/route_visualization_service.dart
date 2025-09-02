@@ -170,7 +170,32 @@ class RouteVisualizationService {
     }
 
     // Create remaining geometry from the actual route geometry
-    final remainingGeometry = route.geometry.skip(startGeometryIndex).toList();
+    // Fix: Don't skip the closest point if user is between geometry points
+    // This prevents showing traveled segments as remaining
+    int adjustedStartIndex = startGeometryIndex;
+    
+    // If current position exists, check if we should include the closest point
+    if (currentPosition != null && startGeometryIndex < route.geometry.length) {
+      final closestPoint = route.geometry[startGeometryIndex];
+      final distanceToClosest = MathUtils.calculateDistance(
+        closestPoint.latitude,
+        closestPoint.longitude,
+        currentPosition.latitude,
+        currentPosition.longitude,
+      );
+      
+      // If we're more than 10 meters from the closest geometry point,
+      // we're likely between points, so include the closest point in remaining route
+      if (distanceToClosest > 10.0 && startGeometryIndex > 0) {
+        // User is between geometry points, don't skip the closest point
+        adjustedStartIndex = startGeometryIndex;
+      } else {
+        // User is very close to or past the geometry point, skip it
+        adjustedStartIndex = startGeometryIndex + 1;
+      }
+    }
+    
+    final remainingGeometry = route.geometry.skip(adjustedStartIndex).toList();
 
     if (remainingGeometry.isEmpty) {
       return {'type': 'FeatureCollection', 'features': []};

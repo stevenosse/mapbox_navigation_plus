@@ -21,6 +21,9 @@ typedef NavigationStartBuilder = String Function(
 /// Callback for creating localized arrival announcement
 typedef ArrivalAnnouncementBuilder = String Function({String? destinationName});
 
+/// Callback for route visualization updates
+typedef RouteVisualizationCallback = void Function(RouteData route, int stepIndex, geo.Position? position);
+
 /// Controller that manages the overall navigation process
 class NavigationController {
   final LocationService _locationService;
@@ -39,6 +42,9 @@ class NavigationController {
   // Voice settings
   VoiceSettings? _voiceSettings;
 
+  // Route visualization callback
+  RouteVisualizationCallback? _routeVisualizationCallback;
+
   // Stream controllers for state updates
   final StreamController<NavigationState> _stateController =
       StreamController<NavigationState>.broadcast();
@@ -56,6 +62,11 @@ class NavigationController {
         _directionsAPI = directionsAPI,
         _cameraController = cameraController,
         _voiceService = voiceService;
+
+  /// Sets the route visualization callback
+  void setRouteVisualizationCallback(RouteVisualizationCallback? callback) {
+    _routeVisualizationCallback = callback;
+  }
 
   /// Current navigation state
   NavigationState get currentState => _currentState;
@@ -147,6 +158,9 @@ class NavigationController {
         );
 
         _currentRoute = route;
+        
+        // Clear route calculation cache for new route
+        route.clearCache();
 
         // Initialize voice service if settings provided
         if (voiceSettings != null) {
@@ -311,6 +325,9 @@ class NavigationController {
       );
 
       _currentRoute = newRoute;
+      
+      // Clear route calculation cache when route changes
+      newRoute.clearCache();
 
       // Only announce route recalculation if explicitly requested
       if (announceRecalculation) {
@@ -514,14 +531,16 @@ class NavigationController {
     ));
   }
 
-  /// Updates navigation progress and state (no route recalculation)
+  /// Updates navigation progress and state based on location changes
   void _updateNavigationProgress(geo.Position position) {
     if (_currentRoute == null) return;
 
-    // Only update navigation state - visualization is handled by MapboxNavigationView
+    // Update navigation state with new position-based calculations
     _updateState(NavigationState.navigating(
       route: _currentRoute!,
       currentPosition: Waypoint.fromPosition(position),
+      currentSpeed: position.speed,
+      currentBearing: position.heading >= 0 ? position.heading : 0.0,
     ));
 
     // Update camera position for smooth tracking
@@ -530,6 +549,12 @@ class NavigationController {
       userBearing: position.heading >= 0 ? position.heading : null,
       route: _currentRoute,
     );
+
+    // Trigger route visualization update based on location change
+    final stepIndex = currentStepIndex;
+    if (_routeVisualizationCallback != null && stepIndex != null) {
+      _routeVisualizationCallback!(_currentRoute!, stepIndex, position);
+    }
   }
 
   /// Updates the current navigation state and notifies listeners

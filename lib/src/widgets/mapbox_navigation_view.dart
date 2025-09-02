@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../models/navigation_state.dart';
 import '../models/route_data.dart';
 import '../models/navigation_step.dart';
@@ -163,8 +164,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   String? _lastRouteHash;
 
-  Timer? _routeUpdateTimer;
-
   // Speed limit data from route annotations
   int? _currentSpeedLimit;
 
@@ -186,7 +185,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     if (widget.overlayController == null) {
       _overlayController.dispose();
     }
-    _stopRouteUpdateTimer();
     super.dispose();
   }
 
@@ -225,6 +223,10 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       navigationStartBuilder: _createLocalizedNavigationStart,
       arrivalAnnouncementBuilder: _createLocalizedArrival,
     );
+
+    // Set up route visualization callback for location-based updates
+    _navigationController!
+        .setRouteVisualizationCallback(_onRouteVisualizationUpdate);
 
     // Set traffic data preference for the navigation controller
     if (widget.enableTrafficData) {
@@ -297,7 +299,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
     switch (state.status) {
       case NavigationStatus.navigating:
-        _startRouteUpdateTimer();
+        await _updateRouteProgress();
 
         if (state.route != null) {
           final currentRouteHash = state.route!.hashCode.toString();
@@ -329,8 +331,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
         break;
       case NavigationStatus.idle:
       case NavigationStatus.arrived:
-        _stopRouteUpdateTimer();
-
         // Clear the route when navigation is idle or arrived
         await _routeVisualizationService!.clearRoute();
         _lastRouteHash = null; // Reset route hash
@@ -338,8 +338,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       case NavigationStatus.calculating:
       case NavigationStatus.paused:
       case NavigationStatus.error:
-        _stopRouteUpdateTimer();
-
         break;
     }
   }
@@ -855,39 +853,17 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     );
   }
 
-  void _startRouteUpdateTimer() {
-    _routeUpdateTimer?.cancel();
-    _routeUpdateTimer = Timer.periodic(
-      const Duration(milliseconds: 50), // 50ms = 20fps for ultra-smooth updates
-      (_) => _performRouteUpdate(),
+  /// Handles route visualization updates triggered by location changes
+  void _onRouteVisualizationUpdate(
+      RouteData route, int stepIndex, geo.Position? position) {
+    if (_routeVisualizationService == null) return;
+
+    // Fire-and-forget route update (no await to avoid blocking)
+    _routeVisualizationService!.updateRouteProgress(
+      route,
+      stepIndex,
+      currentPosition: position,
+      forceUpdate: false, // Only update when necessary
     );
-  }
-
-  void _stopRouteUpdateTimer() {
-    _routeUpdateTimer?.cancel();
-    _routeUpdateTimer = null;
-  }
-
-  /// Performs a single route visualization update
-  void _performRouteUpdate() {
-    if (_routeVisualizationService == null ||
-        _navigationController == null ||
-        _currentState.status != NavigationStatus.navigating ||
-        _currentState.route == null) {
-      return;
-    }
-
-    final currentStepIndex = _navigationController!.currentStepIndex;
-    final currentPosition = _currentState.currentPosition?.toPosition();
-
-    if (currentStepIndex != null && currentPosition != null) {
-      // Fire-and-forget route update (no await to avoid blocking)
-      _routeVisualizationService!.updateRouteProgress(
-        _currentState.route!,
-        currentStepIndex,
-        currentPosition: currentPosition,
-        forceUpdate: true,
-      );
-    }
   }
 }

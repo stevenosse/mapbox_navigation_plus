@@ -73,7 +73,12 @@ class RouteData {
   /// Traffic annotations for route segments (only available for driving-traffic profile)
   final List<TrafficAnnotation>? trafficAnnotations;
 
-  const RouteData({
+  // Caching for performance optimization
+  Map<String, double>? _stepDistanceCache;
+  Map<String, double>? _calculationCache;
+  Waypoint? _lastCalculationPosition;
+
+  RouteData({
     required this.steps,
     required this.totalDistance,
     required this.totalDuration,
@@ -189,6 +194,15 @@ class RouteData {
     final current = currentStep;
     if (current == null) return 0.0;
 
+    // Check cache if position hasn't changed significantly (within 5 meters)
+    final cacheKey = 'remaining_distance_${current.hashCode}';
+    if (_lastCalculationPosition != null && 
+        _calculationCache != null &&
+        _lastCalculationPosition!.distanceTo(currentPosition) < 5.0) {
+      final cached = _calculationCache![cacheKey];
+      if (cached != null) return cached;
+    }
+
     final currentIndex = steps.indexOf(current);
     double remaining = 0.0;
 
@@ -197,10 +211,15 @@ class RouteData {
       Waypoint.fromPosition(current.endLocation),
     );
 
-    // Add distance of all remaining steps
+    // Add distance of all remaining steps (cached calculation)
     for (int i = currentIndex + 1; i < steps.length; i++) {
       remaining += steps[i].distance;
     }
+
+    // Cache the result
+    _calculationCache ??= {};
+    _calculationCache![cacheKey] = remaining;
+    _lastCalculationPosition = currentPosition;
 
     return remaining;
   }
@@ -209,6 +228,15 @@ class RouteData {
   double getRemainingDuration(Waypoint currentPosition) {
     final current = currentStep;
     if (current == null) return 0.0;
+
+    // Check cache if position hasn't changed significantly (within 5 meters)
+    final cacheKey = 'remaining_duration_${current.hashCode}';
+    if (_lastCalculationPosition != null && 
+        _calculationCache != null &&
+        _lastCalculationPosition!.distanceTo(currentPosition) < 5.0) {
+      final cached = _calculationCache![cacheKey];
+      if (cached != null) return cached;
+    }
 
     final currentIndex = steps.indexOf(current);
     double remaining = 0.0;
@@ -222,17 +250,30 @@ class RouteData {
       remaining += steps[i].duration;
     }
 
+    // Cache the result
+    _calculationCache ??= {};
+    _calculationCache![cacheKey] = remaining;
+    _lastCalculationPosition = currentPosition;
+
     return remaining;
   }
 
   /// Calculates progress through a specific step (0.0 to 1.0)
   double getStepProgress(Waypoint currentPosition, NavigationStep step) {
-    final totalStepDistance = Geolocator.distanceBetween(
-      step.startLocation.latitude,
-      step.startLocation.longitude,
-      step.endLocation.latitude,
-      step.endLocation.longitude,
-    );
+    // Cache step distance calculation
+    _stepDistanceCache ??= {};
+    final stepKey = '${step.startLocation.latitude}_${step.startLocation.longitude}_${step.endLocation.latitude}_${step.endLocation.longitude}';
+    
+    double totalStepDistance = _stepDistanceCache![stepKey] ?? 0.0;
+    if (totalStepDistance == 0.0) {
+      totalStepDistance = Geolocator.distanceBetween(
+        step.startLocation.latitude,
+        step.startLocation.longitude,
+        step.endLocation.latitude,
+        step.endLocation.longitude,
+      );
+      _stepDistanceCache![stepKey] = totalStepDistance;
+    }
 
     if (totalStepDistance == 0) return 1.0;
 
@@ -240,6 +281,13 @@ class RouteData {
         Waypoint.fromPosition(step.startLocation).distanceTo(currentPosition);
 
     return (distanceFromStart / totalStepDistance).clamp(0.0, 1.0);
+  }
+
+  /// Clears all cached calculations - call when route changes
+  void clearCache() {
+    _stepDistanceCache?.clear();
+    _calculationCache?.clear();
+    _lastCalculationPosition = null;
   }
 
   /// Creates a copy of this route with updated steps
