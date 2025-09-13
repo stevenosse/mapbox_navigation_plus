@@ -45,7 +45,7 @@ class NavigationState {
   final double remainingDistance;
 
   /// Time remaining to destination in seconds
-  final double remainingDuration;
+  final int remainingDuration;
 
   /// Progress through current step (0.0 to 1.0)
   final double stepProgress;
@@ -75,7 +75,7 @@ class NavigationState {
     this.currentStep,
     this.nextStep,
     this.remainingDistance = 0.0,
-    this.remainingDuration = 0.0,
+    this.remainingDuration = 0,
     this.stepProgress = 0.0,
     this.routeProgress = 0.0,
     this.currentSpeed = 0.0,
@@ -220,7 +220,7 @@ class NavigationState {
     NavigationStep? currentStep,
     NavigationStep? nextStep,
     double? remainingDistance,
-    double? remainingDuration,
+    int? remainingDuration,
     double? stepProgress,
     double? routeProgress,
     double? currentSpeed,

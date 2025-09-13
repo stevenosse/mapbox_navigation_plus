@@ -14,7 +14,7 @@ class FormattingUtils {
   /// Formats duration in seconds to a human-readable string
   ///
   /// Returns minutes for durations < 60 minutes, hours and minutes for longer durations
-  static String formatDuration(double seconds) {
+  static String formatDuration(int seconds) {
     final minutes = (seconds / 60).round();
     if (minutes < 60) {
       return '$minutes min';

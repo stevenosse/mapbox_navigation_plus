@@ -363,7 +363,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   /// Gets the voice service for advanced voice management
   VoiceInstructionService? get voiceService => _voiceService;
 
-
   /// Creates localized navigation start announcement
   String _createLocalizedNavigationStart(
       {String? destinationName, double? totalDistance}) {
@@ -389,7 +388,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           'You have arrived at your destination',
     );
   }
-
 
   /// Updates speed limit data based on current route and position
   void _updateSpeedLimitData() {
@@ -524,13 +522,12 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Base map widget
         MapWidget(
           key: const ValueKey('mapbox_map'),
           cameraOptions: widget.initialCameraPosition ??
               CameraOptions(
                 center: Point(
-                  coordinates: Position(-122.4194, 37.7749), // San Francisco
+                  coordinates: Position(-122.4194, 37.7749),
                 ),
                 zoom: 12.0,
               ),
@@ -539,92 +536,63 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           onMapCreated: _onMapCreated,
           onStyleLoadedListener: _onStyleLoaded,
         ),
-
-        // Navigation controls on the right side
         if (widget.showNavigationControls)
-          Positioned(
-            right: 16,
-            top: 0,
-            bottom: 0,
-            child: widget.customNavigationControls ??
-                NavigationControlsWidget(
-                  navigationController: _navigationController,
-                  voiceService: _voiceService,
-                  isVoiceEnabled: _isVoiceEnabled,
-                  style: widget.navigationControlsStyle,
-                  onVoiceToggle: (enabled) {
-                    setState(() {
-                      _isVoiceEnabled = enabled;
-                    });
-                    _navigationController?.setVoiceEnabled(enabled);
-                  },
-                  onZoomIn: () {
-                    final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                    _cameraController?.setZoom(currentZoom + 1.0);
-                  },
-                  onZoomOut: () {
-                    final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                    _cameraController?.setZoom(currentZoom - 1.0);
-                  },
-                  onRecalculateRoute: () {
-                    final currentPosition = _currentState.currentPosition?.toPosition();
-                    _navigationController?.recalculateRoute(
-                      currentPosition: currentPosition,
-                    );
-                  },
-                  onPauseResumeNavigation: () {
-                    if (_navigationController?.isPaused == true) {
-                      _navigationController?.resumeNavigation();
-                    } else {
-                      _navigationController?.pauseNavigation();
-                    }
-                    setState(() {});
-                  },
-                  isPaused: _navigationController?.isPaused ?? false,
-                ),
+          NavigationControlsPositioned(
+            navigationController: _navigationController,
+            voiceService: _voiceService,
+            isVoiceEnabled: _isVoiceEnabled,
+            style: widget.navigationControlsStyle,
+            customWidget: widget.customNavigationControls,
+            onVoiceToggle: (enabled) {
+              setState(() {
+                _isVoiceEnabled = enabled;
+              });
+              _navigationController?.setVoiceEnabled(enabled);
+            },
+            onZoomIn: () {
+              final currentZoom = _cameraController?.currentZoom ?? 10.0;
+              _cameraController?.setZoom(currentZoom + 1.0);
+            },
+            onZoomOut: () {
+              final currentZoom = _cameraController?.currentZoom ?? 10.0;
+              _cameraController?.setZoom(currentZoom - 1.0);
+            },
+            onRecalculateRoute: () {
+              final currentPosition =
+                  _currentState.currentPosition?.toPosition();
+              _navigationController?.recalculateRoute(
+                currentPosition: currentPosition,
+              );
+            },
+            onPauseResumeNavigation: () {
+              if (_navigationController?.isPaused == true) {
+                _navigationController?.resumeNavigation();
+              } else {
+                _navigationController?.pauseNavigation();
+              }
+              setState(() {});
+            },
+            isPaused: _navigationController?.isPaused ?? false,
           ),
-
-        // Navigation status at the bottom
         if (widget.showStatusWidget)
-          Positioned(
-            bottom: 16,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: widget.customStatusWidget ??
-                  NavigationStatusWidget(
-                    navigationState: _currentState,
-                    style: widget.navigationStatusStyle,
-                  ),
-            ),
+          StatusWidgetPositioned(
+            navigationState: _currentState,
+            style: widget.navigationStatusStyle,
+            customWidget: widget.customStatusWidget,
           ),
-
-        // Navigation instructions at the top
         if (_currentStep != null && widget.showInstructions)
-          Positioned(
-            top: -50,
-            left: 0,
-            right: 0,
-            child: widget.customInstructionWidget ??
-                NavigationInstructionWidget(
-                  currentStep: _currentStep,
-                  remainingDistance: _currentState.remainingDistance,
-                  remainingTime: _currentState.remainingDuration,
-                  style: widget.navigationInstructionStyle,
-                ),
+          InstructionWidgetPositioned(
+            currentStep: _currentStep!,
+            remainingDistance: _currentState.remainingDistance,
+            remainingTime: Duration(seconds: _currentState.remainingDuration),
+            style: widget.navigationInstructionStyle,
+            customWidget: widget.customInstructionWidget,
           ),
-
-        // Speed limit widget at top left
         if (widget.showSpeedLimit && _currentSpeedLimit != null)
-          Positioned(
-            top: 80,
-            left: 16,
-            child: widget.customSpeedLimitWidget ??
-                SpeedLimitWidget(
-                  speedLimit: _currentSpeedLimit,
-                  unit: widget.speedUnit,
-                  isVisible: _currentSpeedLimit != null,
-                ),
+          SpeedLimitWidgetPositioned(
+            speedLimit: _currentSpeedLimit,
+            unit: widget.speedUnit,
+            customWidget: widget.customSpeedLimitWidget,
           ),
       ],
     );
@@ -690,6 +658,146 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       stepIndex,
       currentPosition: position,
       forceUpdate: false, // Only update when necessary
+    );
+  }
+}
+
+class NavigationControlsPositioned extends StatelessWidget {
+  final NavigationController? navigationController;
+  final VoiceInstructionService? voiceService;
+  final bool isVoiceEnabled;
+  final NavigationControlsStyle? style;
+  final NavigationControlsWidget? customWidget;
+  final void Function(bool enabled) onVoiceToggle;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onRecalculateRoute;
+  final VoidCallback onPauseResumeNavigation;
+  final bool isPaused;
+
+  const NavigationControlsPositioned({
+    super.key,
+    required this.navigationController,
+    required this.voiceService,
+    required this.isVoiceEnabled,
+    required this.style,
+    required this.customWidget,
+    required this.onVoiceToggle,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onRecalculateRoute,
+    required this.onPauseResumeNavigation,
+    required this.isPaused,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 16,
+      top: 0,
+      bottom: 0,
+      child: customWidget ??
+          NavigationControlsWidget(
+            navigationController: navigationController,
+            voiceService: voiceService,
+            isVoiceEnabled: isVoiceEnabled,
+            style: style,
+            onVoiceToggle: onVoiceToggle,
+            onZoomIn: onZoomIn,
+            onZoomOut: onZoomOut,
+            onRecalculateRoute: onRecalculateRoute,
+            onPauseResumeNavigation: onPauseResumeNavigation,
+            isPaused: isPaused,
+          ),
+    );
+  }
+}
+
+class StatusWidgetPositioned extends StatelessWidget {
+  final NavigationState navigationState;
+  final NavigationStatusStyle? style;
+  final NavigationStatusWidget? customWidget;
+
+  const StatusWidgetPositioned({
+    super.key,
+    required this.navigationState,
+    required this.style,
+    required this.customWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 16,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: customWidget ??
+            NavigationStatusWidget(
+              navigationState: navigationState,
+              style: style,
+            ),
+      ),
+    );
+  }
+}
+
+class InstructionWidgetPositioned extends StatelessWidget {
+  final NavigationStep currentStep;
+  final double? remainingDistance;
+  final Duration? remainingTime;
+  final NavigationInstructionStyle? style;
+  final NavigationInstructionWidget? customWidget;
+
+  const InstructionWidgetPositioned({
+    super.key,
+    required this.currentStep,
+    required this.remainingDistance,
+    required this.remainingTime,
+    required this.style,
+    required this.customWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: -50,
+      left: 0,
+      right: 0,
+      child: customWidget ??
+          NavigationInstructionWidget(
+            currentStep: currentStep,
+            remainingDistance: remainingDistance,
+            remainingTime: remainingTime?.inSeconds,
+            style: style,
+          ),
+    );
+  }
+}
+
+class SpeedLimitWidgetPositioned extends StatelessWidget {
+  final int? speedLimit;
+  final SpeedUnit unit;
+  final SpeedLimitWidget? customWidget;
+
+  const SpeedLimitWidgetPositioned({
+    super.key,
+    required this.speedLimit,
+    required this.unit,
+    required this.customWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 80,
+      left: 16,
+      child: customWidget ??
+          SpeedLimitWidget(
+            speedLimit: speedLimit,
+            unit: unit,
+            isVisible: speedLimit != null,
+          ),
     );
   }
 }

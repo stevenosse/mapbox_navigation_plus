@@ -20,7 +20,7 @@ class NavigationInstructionWidget extends StatelessWidget {
   final double? remainingDistance;
 
   /// Remaining time to destination
-  final double? remainingTime;
+  final int? remainingTime;
 
   /// Custom styling for the instruction widget
   final NavigationInstructionStyle? style;

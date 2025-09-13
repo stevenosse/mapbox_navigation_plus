@@ -225,9 +225,9 @@ class RouteData {
   }
 
   /// Calculates the remaining duration from current position
-  double getRemainingDuration(Waypoint currentPosition) {
+  int getRemainingDuration(Waypoint currentPosition) {
     final current = currentStep;
-    if (current == null) return 0.0;
+    if (current == null) return 0;
 
     // Check cache if position hasn't changed significantly (within 5 meters)
     final cacheKey = 'remaining_duration_${current.hashCode}';
@@ -235,24 +235,24 @@ class RouteData {
         _calculationCache != null &&
         _lastCalculationPosition!.distanceTo(currentPosition) < 5.0) {
       final cached = _calculationCache![cacheKey];
-      if (cached != null) return cached;
+      if (cached != null) return cached.toInt();
     }
 
     final currentIndex = steps.indexOf(current);
-    double remaining = 0.0;
+    int remaining = 0;
 
     // Estimate remaining time for current step based on progress
     final stepProgress = getStepProgress(currentPosition, current);
-    remaining += current.duration * (1.0 - stepProgress);
+    remaining += (current.duration * (1.0 - stepProgress)).round();
 
     // Add duration of all remaining steps
     for (int i = currentIndex + 1; i < steps.length; i++) {
-      remaining += steps[i].duration;
+      remaining += steps[i].duration.round();
     }
 
     // Cache the result
     _calculationCache ??= {};
-    _calculationCache![cacheKey] = remaining;
+    _calculationCache![cacheKey] = remaining.toDouble();
     _lastCalculationPosition = currentPosition;
 
     return remaining;
@@ -321,7 +321,7 @@ class RouteData {
   }
 
   /// Calculates the remaining duration from current position (Position compatibility)
-  double getRemainingDurationFromPosition(Position currentPosition) {
+  int getRemainingDurationFromPosition(Position currentPosition) {
     return getRemainingDuration(Waypoint.fromPosition(currentPosition));
   }
 
