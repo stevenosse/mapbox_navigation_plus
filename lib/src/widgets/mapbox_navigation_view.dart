@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../models/navigation_state.dart';
 import '../models/route_data.dart';
 import '../models/navigation_step.dart';
@@ -20,7 +21,6 @@ import '../localization/navigation_localizations.dart';
 import 'navigation_instruction_widget.dart';
 import 'navigation_status_widget.dart';
 import 'navigation_controls_widget.dart';
-import 'map_overlay_manager.dart';
 
 /// Callback for navigation events
 typedef NavigationCallback = void Function(NavigationState state);
@@ -68,9 +68,6 @@ class MapboxNavigationView extends StatefulWidget {
   /// Language for instructions
   final String language;
 
-  /// Custom overlay controller for managing map overlays
-  final OverlayController? overlayController;
-
   /// Custom navigation controls widget
   final NavigationControlsWidget? customNavigationControls;
 
@@ -85,12 +82,6 @@ class MapboxNavigationView extends StatefulWidget {
 
   /// Whether to show default status widget
   final bool showStatusWidget;
-
-  /// Custom overlay configurations
-  final List<OverlayConfig> customOverlays;
-
-  /// Callback when an overlay is tapped
-  final void Function(String overlayId)? onOverlayTap;
 
   /// Navigation controls style
   final NavigationControlsStyle? navigationControlsStyle;
@@ -125,15 +116,12 @@ class MapboxNavigationView extends StatefulWidget {
     this.voiceSettings,
     this.onVoiceInstruction,
     this.language = 'en',
-    this.overlayController,
     this.speedUnit = SpeedUnit.kmh,
     this.customNavigationControls,
     this.customInstructionWidget,
     this.customStatusWidget,
     this.showNavigationControls = true,
     this.showStatusWidget = true,
-    this.customOverlays = const [],
-    this.onOverlayTap,
     this.navigationControlsStyle,
     this.navigationStatusStyle,
     this.navigationInstructionStyle,
@@ -155,7 +143,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   CameraController? _cameraController;
   RouteVisualizationService? _routeVisualizationService;
   VoiceInstructionService? _voiceService;
-  late OverlayController _overlayController;
 
   NavigationState _currentState = NavigationState.idle();
   NavigationStep? _currentStep;
@@ -163,17 +150,13 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   String? _lastRouteHash;
 
-  Timer? _routeUpdateTimer;
-
   // Speed limit data from route annotations
   int? _currentSpeedLimit;
 
   @override
   void initState() {
     super.initState();
-    _overlayController = widget.overlayController ?? OverlayController();
     _initializeServices();
-    _setupDefaultOverlays();
   }
 
   @override
@@ -183,10 +166,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     _directionsAPI?.dispose();
     _routeVisualizationService?.dispose().catchError((_) {});
     _voiceService?.dispose().catchError((_) {});
-    if (widget.overlayController == null) {
-      _overlayController.dispose();
-    }
-    _stopRouteUpdateTimer();
     super.dispose();
   }
 
@@ -226,6 +205,10 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       arrivalAnnouncementBuilder: _createLocalizedArrival,
     );
 
+    // Set up route visualization callback for location-based updates
+    _navigationController!
+        .setRouteVisualizationCallback(_onRouteVisualizationUpdate);
+
     // Set traffic data preference for the navigation controller
     if (widget.enableTrafficData) {
       _navigationController!.enableTrafficDataByDefault = true;
@@ -240,7 +223,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           });
 
           _updateSpeedLimitData();
-          _updateOverlayWidgets();
           widget.onNavigationStateChanged?.call(state);
 
           // Update route visualization based on navigation state
@@ -261,7 +243,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
           });
 
           _updateSpeedLimitData();
-          _updateOverlayWidgets();
           widget.onStepChanged?.call(step);
 
           // Update route progress visualization
@@ -297,7 +278,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
     switch (state.status) {
       case NavigationStatus.navigating:
-        _startRouteUpdateTimer();
+        await _updateRouteProgress();
 
         if (state.route != null) {
           final currentRouteHash = state.route!.hashCode.toString();
@@ -329,8 +310,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
         break;
       case NavigationStatus.idle:
       case NavigationStatus.arrived:
-        _stopRouteUpdateTimer();
-
         // Clear the route when navigation is idle or arrived
         await _routeVisualizationService!.clearRoute();
         _lastRouteHash = null; // Reset route hash
@@ -338,8 +317,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       case NavigationStatus.calculating:
       case NavigationStatus.paused:
       case NavigationStatus.error:
-        _stopRouteUpdateTimer();
-
         break;
     }
   }
@@ -386,57 +363,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   /// Gets the voice service for advanced voice management
   VoiceInstructionService? get voiceService => _voiceService;
 
-  /// Gets the overlay controller for dynamic widget management
-  OverlayController get overlayController => _overlayController;
-
-  /// Add a custom overlay widget
-  void addOverlay(OverlayConfig config) {
-    _overlayController.addOverlay(config);
-  }
-
-  /// Remove an overlay by ID
-  void removeOverlay(String id) {
-    _overlayController.removeOverlay(id);
-  }
-
-  /// Update an existing overlay
-  void updateOverlay(String id, OverlayConfig Function(OverlayConfig) updater) {
-    _overlayController.updateOverlay(id, updater);
-  }
-
-  /// Show an overlay
-  void showOverlay(String id) {
-    _overlayController.showOverlay(id);
-  }
-
-  /// Hide an overlay
-  void hideOverlay(String id) {
-    _overlayController.hideOverlay(id);
-  }
-
-  /// Toggle overlay visibility
-  void toggleOverlay(String id) {
-    _overlayController.toggleOverlay(id);
-  }
-
-  /// Clear all overlays
-  void clearAllOverlays() {
-    _overlayController.clearOverlays();
-  }
-
-  /// Get overlay by ID
-  OverlayConfig? getOverlay(String id) {
-    return _overlayController.getOverlay(id);
-  }
-
-  /// Check if overlay exists
-  bool hasOverlay(String id) {
-    return _overlayController.hasOverlay(id);
-  }
-
-  /// Get all current overlays
-  List<OverlayConfig> get allOverlays => _overlayController.overlays;
-
   /// Creates localized navigation start announcement
   String _createLocalizedNavigationStart(
       {String? destinationName, double? totalDistance}) {
@@ -461,197 +387,6 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       youHaveArrived: localizations?.youHaveArrived ??
           'You have arrived at your destination',
     );
-  }
-
-  /// Sets up default overlay widgets
-  void _setupDefaultOverlays() {
-    // Add custom overlays first
-    for (final overlay in widget.customOverlays) {
-      _overlayController.addOverlay(overlay);
-    }
-
-    // Add default navigation controls if enabled
-    if (widget.showNavigationControls) {
-      _overlayController.addOverlay(
-        OverlayConfig(
-          id: 'navigation_controls',
-          widget: widget.customNavigationControls ??
-              NavigationControlsWidget(
-                navigationController: _navigationController,
-                voiceService: _voiceService,
-                isVoiceEnabled: _isVoiceEnabled,
-                style: widget.navigationControlsStyle,
-                onVoiceToggle: (enabled) {
-                  setState(() {
-                    _isVoiceEnabled = enabled;
-                  });
-                  _navigationController?.setVoiceEnabled(enabled);
-                },
-                onZoomIn: () {
-                  final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                  _cameraController?.setZoom(currentZoom + 1.0);
-                },
-                onZoomOut: () {
-                  final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                  _cameraController?.setZoom(currentZoom - 1.0);
-                },
-                onRecalculateRoute: () {
-                  final currentPosition =
-                      _currentState.currentPosition?.toPosition();
-                  _navigationController?.recalculateRoute(
-                    currentPosition: currentPosition,
-                  );
-                },
-                onPauseResumeNavigation: () {
-                  if (_navigationController?.isPaused == true) {
-                    _navigationController?.resumeNavigation();
-                  } else {
-                    _navigationController?.pauseNavigation();
-                  }
-                  setState(() {}); // Refresh UI to show new pause state
-                },
-                isPaused: _navigationController?.isPaused ?? false,
-              ),
-          position: OverlayPosition.centerRight,
-          offset: const Offset(16, 0),
-          zIndex: 100,
-        ),
-      );
-    }
-
-    // Add default status widget if enabled
-    if (widget.showStatusWidget) {
-      _overlayController.addOverlay(
-        OverlayConfig(
-          id: 'navigation_status',
-          widget: widget.customStatusWidget ??
-              NavigationStatusWidget(
-                navigationState: _currentState,
-                style: widget.navigationStatusStyle,
-              ),
-          position: OverlayPosition.bottomCenter,
-          offset: const Offset(0, 16),
-          zIndex: 50,
-        ),
-      );
-    }
-
-    // Add speed limit widget if enabled
-    if (widget.showSpeedLimit) {
-      _overlayController.addOverlay(
-        OverlayConfig(
-          id: 'speed_limit',
-          widget: widget.customSpeedLimitWidget ??
-              SpeedLimitWidget(
-                speedLimit: _currentSpeedLimit,
-                unit: widget.speedUnit,
-                isVisible: _currentSpeedLimit != null,
-              ),
-          position: OverlayPosition.topLeft,
-          offset: const Offset(16, 80),
-          zIndex: 80,
-        ),
-      );
-    }
-  }
-
-  /// Updates overlay widgets when navigation state changes
-  void _updateOverlayWidgets() {
-    // Update navigation controls
-    if (widget.showNavigationControls &&
-        _overlayController.hasOverlay('navigation_controls')) {
-      _overlayController.updateOverlay('navigation_controls', (config) {
-        return config.copyWith(
-          widget: widget.customNavigationControls ??
-              NavigationControlsWidget(
-                navigationController: _navigationController,
-                voiceService: _voiceService,
-                isVoiceEnabled: _isVoiceEnabled,
-                style: widget.navigationControlsStyle,
-                onVoiceToggle: (enabled) {
-                  setState(() {
-                    _isVoiceEnabled = enabled;
-                  });
-                  _navigationController?.setVoiceEnabled(enabled);
-                },
-                onZoomIn: () {
-                  final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                  _cameraController?.setZoom(currentZoom + 1.0);
-                },
-                onZoomOut: () {
-                  final currentZoom = _cameraController?.currentZoom ?? 10.0;
-                  _cameraController?.setZoom(currentZoom - 1.0);
-                },
-                onRecalculateRoute: () {
-                  final currentPosition =
-                      _currentState.currentPosition?.toPosition();
-                  _navigationController?.recalculateRoute(
-                    currentPosition: currentPosition,
-                  );
-                },
-                onPauseResumeNavigation: () {
-                  if (_navigationController?.isPaused == true) {
-                    _navigationController?.resumeNavigation();
-                  } else {
-                    _navigationController?.pauseNavigation();
-                  }
-                  setState(() {}); // Refresh UI to show new pause state
-                },
-                isPaused: _navigationController?.isPaused ?? false,
-              ),
-        );
-      });
-    }
-
-    // Update status widget
-    if (widget.showStatusWidget &&
-        _overlayController.hasOverlay('navigation_status')) {
-      _overlayController.updateOverlay('navigation_status', (config) {
-        return config.copyWith(
-          widget: widget.customStatusWidget ??
-              NavigationStatusWidget(
-                navigationState: _currentState,
-                style: widget.navigationStatusStyle,
-              ),
-        );
-      });
-    }
-
-    // Update instruction widget based on current step
-    if (_currentStep != null && widget.showInstructions) {
-      final instructionWidget = widget.customInstructionWidget ??
-          NavigationInstructionWidget(
-            currentStep: _currentStep,
-            remainingDistance: _currentState.remainingDistance,
-            remainingTime: _currentState.remainingDuration,
-            style: widget.navigationInstructionStyle,
-          );
-
-      _overlayController.addOverlay(
-        OverlayConfig(
-          id: 'navigation_instruction',
-          widget: instructionWidget,
-          position: OverlayPosition.topCenter,
-          offset: Offset(0, -50),
-          zIndex: 75,
-        ),
-      );
-    } else {
-      _overlayController.removeOverlay('navigation_instruction');
-    }
-
-    if (widget.showSpeedLimit && _overlayController.hasOverlay('speed_limit')) {
-      _overlayController.updateOverlay('speed_limit', (config) {
-        return config.copyWith(
-          widget: widget.customSpeedLimitWidget ??
-              SpeedLimitWidget(
-                speedLimit: _currentSpeedLimit,
-                unit: widget.speedUnit,
-                isVisible: _currentSpeedLimit != null,
-              ),
-        );
-      });
-    }
   }
 
   /// Updates speed limit data based on current route and position
@@ -785,24 +520,81 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
 
   @override
   Widget build(BuildContext context) {
-    _updateOverlayWidgets();
-    return ManagedMapOverlay(
-      controller: _overlayController,
-      onOverlayTap: widget.onOverlayTap,
-      child: MapWidget(
-        key: const ValueKey('mapbox_map'),
-        cameraOptions: widget.initialCameraPosition ??
-            CameraOptions(
-              center: Point(
-                coordinates: Position(-122.4194, 37.7749), // San Francisco
+    return Stack(
+      children: [
+        MapWidget(
+          key: const ValueKey('mapbox_map'),
+          cameraOptions: widget.initialCameraPosition ??
+              CameraOptions(
+                center: Point(
+                  coordinates: Position(-122.4194, 37.7749),
+                ),
+                zoom: 12.0,
               ),
-              zoom: 12.0,
-            ),
-        styleUri: widget.styleUri ?? MapboxStyles.MAPBOX_STREETS,
-        textureView: true,
-        onMapCreated: _onMapCreated,
-        onStyleLoadedListener: _onStyleLoaded,
-      ),
+          styleUri: widget.styleUri ?? MapboxStyles.MAPBOX_STREETS,
+          textureView: true,
+          onMapCreated: _onMapCreated,
+          onStyleLoadedListener: _onStyleLoaded,
+        ),
+        if (widget.showNavigationControls)
+          NavigationControlsPositioned(
+            navigationController: _navigationController,
+            voiceService: _voiceService,
+            isVoiceEnabled: _isVoiceEnabled,
+            style: widget.navigationControlsStyle,
+            customWidget: widget.customNavigationControls,
+            onVoiceToggle: (enabled) {
+              setState(() {
+                _isVoiceEnabled = enabled;
+              });
+              _navigationController?.setVoiceEnabled(enabled);
+            },
+            onZoomIn: () {
+              final currentZoom = _cameraController?.currentZoom ?? 10.0;
+              _cameraController?.setZoom(currentZoom + 1.0);
+            },
+            onZoomOut: () {
+              final currentZoom = _cameraController?.currentZoom ?? 10.0;
+              _cameraController?.setZoom(currentZoom - 1.0);
+            },
+            onRecalculateRoute: () {
+              final currentPosition =
+                  _currentState.currentPosition?.toPosition();
+              _navigationController?.recalculateRoute(
+                currentPosition: currentPosition,
+              );
+            },
+            onPauseResumeNavigation: () {
+              if (_navigationController?.isPaused == true) {
+                _navigationController?.resumeNavigation();
+              } else {
+                _navigationController?.pauseNavigation();
+              }
+              setState(() {});
+            },
+            isPaused: _navigationController?.isPaused ?? false,
+          ),
+        if (widget.showStatusWidget)
+          StatusWidgetPositioned(
+            navigationState: _currentState,
+            style: widget.navigationStatusStyle,
+            customWidget: widget.customStatusWidget,
+          ),
+        if (_currentStep != null && widget.showInstructions)
+          InstructionWidgetPositioned(
+            currentStep: _currentStep!,
+            remainingDistance: _currentState.remainingDistance,
+            remainingTime: Duration(seconds: _currentState.remainingDuration),
+            style: widget.navigationInstructionStyle,
+            customWidget: widget.customInstructionWidget,
+          ),
+        if (widget.showSpeedLimit && _currentSpeedLimit != null)
+          SpeedLimitWidgetPositioned(
+            speedLimit: _currentSpeedLimit,
+            unit: widget.speedUnit,
+            customWidget: widget.customSpeedLimitWidget,
+          ),
+      ],
     );
   }
 
@@ -855,39 +647,157 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
     );
   }
 
-  void _startRouteUpdateTimer() {
-    _routeUpdateTimer?.cancel();
-    _routeUpdateTimer = Timer.periodic(
-      const Duration(milliseconds: 50), // 50ms = 20fps for ultra-smooth updates
-      (_) => _performRouteUpdate(),
+  /// Handles route visualization updates triggered by location changes
+  void _onRouteVisualizationUpdate(
+      RouteData route, int stepIndex, geo.Position? position) {
+    if (_routeVisualizationService == null) return;
+
+    // Fire-and-forget route update (no await to avoid blocking)
+    _routeVisualizationService!.updateRouteProgress(
+      route,
+      stepIndex,
+      currentPosition: position,
+      forceUpdate: false, // Only update when necessary
     );
   }
+}
 
-  void _stopRouteUpdateTimer() {
-    _routeUpdateTimer?.cancel();
-    _routeUpdateTimer = null;
+class NavigationControlsPositioned extends StatelessWidget {
+  final NavigationController? navigationController;
+  final VoiceInstructionService? voiceService;
+  final bool isVoiceEnabled;
+  final NavigationControlsStyle? style;
+  final NavigationControlsWidget? customWidget;
+  final void Function(bool enabled) onVoiceToggle;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onRecalculateRoute;
+  final VoidCallback onPauseResumeNavigation;
+  final bool isPaused;
+
+  const NavigationControlsPositioned({
+    super.key,
+    required this.navigationController,
+    required this.voiceService,
+    required this.isVoiceEnabled,
+    required this.style,
+    required this.customWidget,
+    required this.onVoiceToggle,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onRecalculateRoute,
+    required this.onPauseResumeNavigation,
+    required this.isPaused,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 16,
+      top: 0,
+      bottom: 0,
+      child: customWidget ??
+          NavigationControlsWidget(
+            navigationController: navigationController,
+            voiceService: voiceService,
+            isVoiceEnabled: isVoiceEnabled,
+            style: style,
+            onVoiceToggle: onVoiceToggle,
+            onZoomIn: onZoomIn,
+            onZoomOut: onZoomOut,
+            onRecalculateRoute: onRecalculateRoute,
+            onPauseResumeNavigation: onPauseResumeNavigation,
+            isPaused: isPaused,
+          ),
+    );
   }
+}
 
-  /// Performs a single route visualization update
-  void _performRouteUpdate() {
-    if (_routeVisualizationService == null ||
-        _navigationController == null ||
-        _currentState.status != NavigationStatus.navigating ||
-        _currentState.route == null) {
-      return;
-    }
+class StatusWidgetPositioned extends StatelessWidget {
+  final NavigationState navigationState;
+  final NavigationStatusStyle? style;
+  final NavigationStatusWidget? customWidget;
 
-    final currentStepIndex = _navigationController!.currentStepIndex;
-    final currentPosition = _currentState.currentPosition?.toPosition();
+  const StatusWidgetPositioned({
+    super.key,
+    required this.navigationState,
+    required this.style,
+    required this.customWidget,
+  });
 
-    if (currentStepIndex != null && currentPosition != null) {
-      // Fire-and-forget route update (no await to avoid blocking)
-      _routeVisualizationService!.updateRouteProgress(
-        _currentState.route!,
-        currentStepIndex,
-        currentPosition: currentPosition,
-        forceUpdate: true,
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 16,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: customWidget ??
+            NavigationStatusWidget(
+              navigationState: navigationState,
+              style: style,
+            ),
+      ),
+    );
+  }
+}
+
+class InstructionWidgetPositioned extends StatelessWidget {
+  final NavigationStep currentStep;
+  final double? remainingDistance;
+  final Duration? remainingTime;
+  final NavigationInstructionStyle? style;
+  final NavigationInstructionWidget? customWidget;
+
+  const InstructionWidgetPositioned({
+    super.key,
+    required this.currentStep,
+    required this.remainingDistance,
+    required this.remainingTime,
+    required this.style,
+    required this.customWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: -50,
+      left: 0,
+      right: 0,
+      child: customWidget ??
+          NavigationInstructionWidget(
+            currentStep: currentStep,
+            remainingDistance: remainingDistance,
+            remainingTime: remainingTime?.inSeconds,
+            style: style,
+          ),
+    );
+  }
+}
+
+class SpeedLimitWidgetPositioned extends StatelessWidget {
+  final int? speedLimit;
+  final SpeedUnit unit;
+  final SpeedLimitWidget? customWidget;
+
+  const SpeedLimitWidgetPositioned({
+    super.key,
+    required this.speedLimit,
+    required this.unit,
+    required this.customWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 80,
+      left: 16,
+      child: customWidget ??
+          SpeedLimitWidget(
+            speedLimit: speedLimit,
+            unit: unit,
+            isVisible: speedLimit != null,
+          ),
+    );
   }
 }

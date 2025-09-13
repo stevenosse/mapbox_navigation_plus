@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -15,6 +16,14 @@ class CameraController {
   double _currentBearing = nav_constants.NavigationConstants.defaultBearing;
   bool _isFollowingUser = true;
   bool _isNavigationMode = false;
+
+  // Smooth camera tracking
+  geo.Position? _lastCameraPosition;
+  DateTime? _lastCameraUpdate;
+  Timer? _smoothUpdateTimer;
+
+  static const double _smoothingFactor =
+      0.3; // Interpolation factor for smoother movement
 
   /// Initialize the controller with a MapboxMap instance
   void initialize(MapboxMap mapboxMap) {
@@ -45,20 +54,27 @@ class CameraController {
   }) async {
     if (_mapboxMap == null || !_isFollowingUser) return;
 
+    // For smooth real-time updates, use direct camera setting without animation
+    // This prevents the jarring effect of multiple overlapping animations
+    final shouldAnimateSmooth = _shouldUseSmoothAnimation(userPosition);
+
     if (_isNavigationMode && route != null) {
       await _updateNavigationCamera(
         userPosition: userPosition,
         userBearing: userBearing,
         route: route,
-        animate: animate,
+        animate: shouldAnimateSmooth,
       );
     } else {
       await _updateFollowCamera(
         userPosition: userPosition,
         userBearing: userBearing,
-        animate: animate,
+        animate: shouldAnimateSmooth,
       );
     }
+
+    _lastCameraPosition = userPosition;
+    _lastCameraUpdate = DateTime.now();
   }
 
   /// Updates camera to follow a specific navigation step
@@ -108,41 +124,78 @@ class CameraController {
     RouteData? route,
     bool animate = true,
   }) async {
+    // Validate position before using
+    if (!_isValidPosition(userPosition)) {
+      return; // Skip invalid positions
+    }
+
     // Calculate bearing from route if available, otherwise use user bearing
     double targetBearing = userBearing ?? 0.0;
 
     if (route != null) {
       final routeBearing = _calculateRouteBearing(userPosition, route);
       if (routeBearing != null) {
-        targetBearing = routeBearing;
+        // Smooth bearing transitions to prevent sudden rotations
+        targetBearing = _smoothBearing(_currentBearing, routeBearing);
       }
     }
+
+    // Use actual user position for camera - no smoothing that could cause invalid positions
+    // Only smooth if we're very close to the last position (within 20 meters)
+    final useSmoothing = _lastCameraPosition != null &&
+        geo.Geolocator.distanceBetween(
+              _lastCameraPosition!.latitude,
+              _lastCameraPosition!.longitude,
+              userPosition.latitude,
+              userPosition.longitude,
+            ) <
+            20.0;
+
+    final cameraPosition =
+        useSmoothing ? _smoothPosition(userPosition) : userPosition;
 
     _currentBearing = targetBearing;
     _currentPitch = nav_constants.NavigationConstants.navigationPitch;
 
-    // Create camera options
+    // Create camera options with validated position
     final cameraOptions = CameraOptions(
       center: Point(
-          coordinates: Position(userPosition.longitude, userPosition.latitude)),
+          coordinates:
+              Position(cameraPosition.longitude, cameraPosition.latitude)),
       zoom: _currentZoom,
       bearing: targetBearing,
       pitch: _currentPitch,
     );
 
     try {
-      if (animate) {
+      if (animate && useSmoothing) {
+        // Only animate for small smooth movements
         await _mapboxMap!.flyTo(
             cameraOptions,
             MapAnimationOptions(
-              duration: nav_constants.NavigationConstants.animationDuration,
+              duration: 100,
+              startDelay: 0,
             ));
       } else {
+        // Direct camera update for instant response or large movements
         await _mapboxMap!.setCamera(cameraOptions);
       }
     } catch (e) {
       // Fallback to basic camera update if flyTo fails
-      await _mapboxMap!.setCamera(cameraOptions);
+      try {
+        // Use original position if smoothed position causes issues
+        final fallbackOptions = CameraOptions(
+          center: Point(
+              coordinates:
+                  Position(userPosition.longitude, userPosition.latitude)),
+          zoom: _currentZoom,
+          bearing: targetBearing,
+          pitch: _currentPitch,
+        );
+        await _mapboxMap!.setCamera(fallbackOptions);
+      } catch (fallbackError) {
+        // Silently ignore camera update errors to prevent disruption
+      }
     }
   }
 
@@ -152,33 +205,66 @@ class CameraController {
     double? userBearing,
     bool animate = true,
   }) async {
-    final targetBearing = userBearing ?? 0.0;
+    // Validate position before using
+    if (!_isValidPosition(userPosition)) {
+      return; // Skip invalid positions
+    }
+
+    final targetBearing = userBearing != null
+        ? _smoothBearing(_currentBearing, userBearing)
+        : _currentBearing;
+
+    // Use actual position for camera, only smooth for small movements
+    final useSmoothing = _lastCameraPosition != null &&
+        geo.Geolocator.distanceBetween(
+              _lastCameraPosition!.latitude,
+              _lastCameraPosition!.longitude,
+              userPosition.latitude,
+              userPosition.longitude,
+            ) <
+            20.0;
+
+    final cameraPosition =
+        useSmoothing ? _smoothPosition(userPosition) : userPosition;
 
     _currentBearing = targetBearing;
     _currentPitch = nav_constants.NavigationConstants.overviewPitch;
 
     final cameraOptions = CameraOptions(
       center: Point(
-          coordinates: Position(userPosition.longitude, userPosition.latitude)),
+          coordinates:
+              Position(cameraPosition.longitude, cameraPosition.latitude)),
       zoom: _currentZoom,
       bearing: targetBearing,
       pitch: _currentPitch,
     );
 
     try {
-      if (animate) {
+      if (animate && useSmoothing) {
         await _mapboxMap!.flyTo(
             cameraOptions,
             MapAnimationOptions(
-              duration:
-                  nav_constants.NavigationConstants.quickAnimationDuration,
+              duration: 100,
+              startDelay: 0,
             ));
       } else {
         await _mapboxMap!.setCamera(cameraOptions);
       }
     } catch (e) {
-      // Fallback to basic camera update if flyTo fails
-      await _mapboxMap!.setCamera(cameraOptions);
+      // Fallback with original position
+      try {
+        final fallbackOptions = CameraOptions(
+          center: Point(
+              coordinates:
+                  Position(userPosition.longitude, userPosition.latitude)),
+          zoom: _currentZoom,
+          bearing: targetBearing,
+          pitch: _currentPitch,
+        );
+        await _mapboxMap!.setCamera(fallbackOptions);
+      } catch (fallbackError) {
+        // Silently ignore camera update errors
+      }
     }
   }
 
@@ -403,8 +489,134 @@ class CameraController {
     _currentBearing = userBearing;
   }
 
+  /// Determines if smooth animation should be used based on update frequency
+  bool _shouldUseSmoothAnimation(geo.Position currentPosition) {
+    if (_lastCameraUpdate == null || _lastCameraPosition == null) {
+      return false; // First update, no animation
+    }
+
+    final timeSinceLastUpdate = DateTime.now().difference(_lastCameraUpdate!);
+    final distance = geo.Geolocator.distanceBetween(
+      _lastCameraPosition!.latitude,
+      _lastCameraPosition!.longitude,
+      currentPosition.latitude,
+      currentPosition.longitude,
+    );
+
+    // Use animation only for small, frequent updates
+    // This creates smooth movement without jarring jumps
+    return timeSinceLastUpdate.inMilliseconds < 200 && distance < 50;
+  }
+
+  /// Smooths position updates for fluid camera movement
+  geo.Position _smoothPosition(geo.Position targetPosition) {
+    if (_lastCameraPosition == null) {
+      return targetPosition;
+    }
+
+    // Validate that smoothing won't create invalid coordinates
+    final distance = geo.Geolocator.distanceBetween(
+      _lastCameraPosition!.latitude,
+      _lastCameraPosition!.longitude,
+      targetPosition.latitude,
+      targetPosition.longitude,
+    );
+
+    // Don't smooth if distance is too large (likely a jump/teleport)
+    if (distance > 50.0) {
+      return targetPosition;
+    }
+
+    // Apply exponential smoothing for ultra-smooth movement
+    final smoothedLat = _lastCameraPosition!.latitude +
+        (targetPosition.latitude - _lastCameraPosition!.latitude) *
+            _smoothingFactor;
+    final smoothedLng = _lastCameraPosition!.longitude +
+        (targetPosition.longitude - _lastCameraPosition!.longitude) *
+            _smoothingFactor;
+
+    // Validate smoothed coordinates
+    if (smoothedLat.abs() > 90 || smoothedLng.abs() > 180) {
+      return targetPosition; // Return original if smoothed is invalid
+    }
+
+    return geo.Position(
+      latitude: smoothedLat,
+      longitude: smoothedLng,
+      timestamp: targetPosition.timestamp,
+      accuracy: targetPosition.accuracy,
+      altitude: targetPosition.altitude,
+      altitudeAccuracy: targetPosition.altitudeAccuracy,
+      heading: targetPosition.heading,
+      headingAccuracy: targetPosition.headingAccuracy,
+      speed: targetPosition.speed,
+      speedAccuracy: targetPosition.speedAccuracy,
+    );
+  }
+
+  /// Smooths bearing transitions to prevent sudden rotations
+  double _smoothBearing(double currentBearing, double targetBearing) {
+    // Handle bearing wrap-around (0-360 degrees)
+    double diff = targetBearing - currentBearing;
+
+    // Normalize difference to [-180, 180]
+    if (diff > 180) {
+      diff -= 360;
+    } else if (diff < -180) {
+      diff += 360;
+    }
+
+    // Apply smoothing with larger factor for smaller changes
+    final smoothingFactor = diff.abs() < 30 ? 0.3 : 0.5;
+    return currentBearing + diff * smoothingFactor;
+  }
+
+  /// Validates if a position is valid for camera use
+  bool _isValidPosition(geo.Position position) {
+    // Check latitude bounds (-90 to 90)
+    if (position.latitude.abs() > 90) {
+      return false;
+    }
+
+    // Check longitude bounds (-180 to 180)
+    if (position.longitude.abs() > 180) {
+      return false;
+    }
+
+    // Check for NaN or infinite values
+    if (position.latitude.isNaN ||
+        position.latitude.isInfinite ||
+        position.longitude.isNaN ||
+        position.longitude.isInfinite) {
+      return false;
+    }
+
+    // Check if position is (0, 0) which is often a default/error value
+    if (position.latitude == 0 && position.longitude == 0) {
+      // Unless we're actually near the equator/prime meridian
+      if (_lastCameraPosition != null) {
+        final distance = geo.Geolocator.distanceBetween(
+          _lastCameraPosition!.latitude,
+          _lastCameraPosition!.longitude,
+          0,
+          0,
+        );
+        // If we're more than 1000km from (0,0) and suddenly at (0,0), it's likely an error
+        if (distance > 1000000) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   /// Reset camera to default state
   void reset() {
+    _smoothUpdateTimer?.cancel();
+    _smoothUpdateTimer = null;
+    _lastCameraPosition = null;
+    _lastCameraUpdate = null;
     _currentZoom = nav_constants.NavigationConstants.defaultZoom;
     _currentPitch = nav_constants.NavigationConstants.defaultPitch;
     _currentBearing = nav_constants.NavigationConstants.defaultBearing;
@@ -414,6 +626,8 @@ class CameraController {
 
   /// Dispose resources
   void dispose() {
+    _smoothUpdateTimer?.cancel();
+    _smoothUpdateTimer = null;
     _mapboxMap = null;
   }
 }

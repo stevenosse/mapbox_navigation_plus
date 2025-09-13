@@ -1,12 +1,26 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mapbox_navigation/mapbox_navigation.dart';
-import 'advanced_features_screen.dart';
 
 // Mapbox access token
-const String mapboxAccessToken =
-    'YOUR_MAPBOX_ACCESS_TOKEN';
+String mapboxAccessToken = '';
 
-void main() {
+Future<void> loadMapboxAccessToken() async {
+  try {
+    final fileContent = await rootBundle.loadString('assets/credentials.json');
+    final credentials = json.decode(fileContent) as Map<String, dynamic>;
+    mapboxAccessToken = credentials['MAPBOX_ACCESS_TOKEN'];
+  } catch (e) {
+    debugPrint('Error loading Mapbox access token: $e');
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await loadMapboxAccessToken();
+
   WidgetsFlutterBinding.ensureInitialized();
   MapboxOptions.setAccessToken(mapboxAccessToken);
   runApp(const NavigationExampleApp());
@@ -18,7 +32,7 @@ class NavigationExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mapbox Navigation Example',
+      title: 'Mapbox Navigation',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -39,7 +53,6 @@ class NavigationExampleScreen extends StatefulWidget {
 class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
   NavigationController? _navigationController;
 
-  // Example coordinates (San Francisco to Los Angeles)
   final Waypoint _origin = Waypoint(
     latitude: 37.7749,
     longitude: -122.4194,
@@ -61,22 +74,6 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
       appBar: AppBar(
         title: const Text('Mapbox Navigation Example'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.explore),
-            tooltip: 'Advanced Features',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AdvancedFeaturesScreen(
-                    accessToken: mapboxAccessToken,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -125,6 +122,7 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
                 ),
                 zoom: 12.0,
               ),
+              showSpeedLimit: true,
               styleUri: MapboxStyles.MAPBOX_STREETS,
               onMapReady: _onMapReady,
               onNavigationStateChanged: _onNavigationStateChanged,

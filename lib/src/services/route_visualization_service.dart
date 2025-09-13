@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import '../models/route_data.dart';
 import '../models/waypoint.dart';
-import '../utils/route_utils.dart';
 import '../utils/constants.dart' as nav_constants;
 import '../utils/math_utils.dart';
 
@@ -19,7 +18,6 @@ class RouteVisualizationService {
   bool _isInitialized = false;
 
   // Cache for optimization
-  Map<String, dynamic>? _cachedFullRouteGeoJson;
   int? _lastStepIndex;
   String? _lastRouteHash;
 
@@ -42,24 +40,13 @@ class RouteVisualizationService {
       _currentRoute = route;
       _lastRouteHash = routeHash;
 
-      // Only regenerate full route GeoJSON if route changed
-      if (isNewRoute || _cachedFullRouteGeoJson == null) {
-        final routeGeoJsonString = RouteUtils.routeToGeoJson(route);
-        _cachedFullRouteGeoJson = json.decode(routeGeoJsonString);
+      // Update both traveled and remaining portions of the route
+      await _updateRouteSplit(route, currentStepIndex, currentPosition);
 
-        // Update the full route source (for traveled portion)
-        await _mapboxMap!.style.setStyleSourceProperty(
-          _routeSourceId,
-          'data',
-          _cachedFullRouteGeoJson!,
-        );
-
-        // Update layer styling based on traffic data for new routes
+      // Update layer styling if needed
+      if (isNewRoute) {
         await _updateRouteLayerStyling(route);
       }
-
-      // Always update remaining route (this changes frequently during navigation)
-      await _updateRemainingRoute(route, currentStepIndex, currentPosition);
     } catch (e) {
       throw RouteVisualizationException('Failed to draw route: $e');
     }
@@ -71,60 +58,98 @@ class RouteVisualizationService {
     if (!_isInitialized || _mapboxMap == null) return;
 
     try {
-      await _updateRemainingRoute(route, currentStepIndex, currentPosition,
-          forceUpdate: forceUpdate);
+      // Skip update if not needed
+      if (!forceUpdate &&
+          !_shouldUpdateRoute(currentStepIndex, currentPosition)) {
+        return;
+      }
+
+      await _updateRouteSplit(route, currentStepIndex, currentPosition);
     } catch (e) {
       throw RouteVisualizationException('Failed to update route progress: $e');
     }
   }
 
-  /// Helper method to update remaining route with caching
-  Future<void> _updateRemainingRoute(
-      RouteData route, int? currentStepIndex, geo.Position? currentPosition,
-      {bool forceUpdate = false}) async {
-    // Skip update if step hasn't changed and position is close to last cached position
-    if (!forceUpdate &&
-        _shouldSkipRemainingRouteUpdate(currentStepIndex, currentPosition)) {
+  /// Updates both traveled and remaining portions of the route
+  Future<void> _updateRouteSplit(RouteData route, int? currentStepIndex,
+      geo.Position? currentPosition) async {
+    if (currentStepIndex == null || currentPosition == null) {
+      // No progress yet, show full route as remaining
+      final fullRouteGeoJson = _createFullRouteGeoJson(route);
+
+      // Clear traveled route
+      await _mapboxMap!.style.setStyleSourceProperty(
+        _routeSourceId,
+        'data',
+        {'type': 'FeatureCollection', 'features': []},
+      );
+
+      // Set full route as remaining
+      await _mapboxMap!.style.setStyleSourceProperty(
+        '$_routeSourceId-remaining',
+        'data',
+        fullRouteGeoJson,
+      );
       return;
     }
 
-    final remainingRouteGeoJson =
-        _createRemainingRouteGeoJson(route, currentStepIndex, currentPosition);
+    // Find the exact split point on the route
+    final splitPoint =
+        _findSplitPoint(route, currentPosition, currentStepIndex);
 
-    _lastStepIndex = currentStepIndex;
-    _lastUpdatePosition = currentPosition;
-    _lastUpdateTime = DateTime.now();
+    // Create traveled portion (everything behind the user)
+    final traveledGeoJson = _createTraveledRouteGeoJson(
+        route, splitPoint.geometryIndex, currentPosition);
+
+    // Create remaining portion (everything ahead of the user)
+    final remainingGeoJson = _createRemainingRouteGeoJson(
+        route,
+        splitPoint.geometryIndex,
+        currentPosition,
+        splitPoint.projectedPosition);
+
+    // Update both sources
+    await _mapboxMap!.style.setStyleSourceProperty(
+      _routeSourceId,
+      'data',
+      traveledGeoJson,
+    );
 
     await _mapboxMap!.style.setStyleSourceProperty(
       '$_routeSourceId-remaining',
       'data',
-      remainingRouteGeoJson,
+      remainingGeoJson,
     );
+
+    // Cache update info
+    _lastStepIndex = currentStepIndex;
+    _lastUpdatePosition = currentPosition;
+    _lastUpdateTime = DateTime.now();
   }
 
   // Performance optimization - track last update position
   geo.Position? _lastUpdatePosition;
   DateTime? _lastUpdateTime;
 
-  /// Determines if remaining route update can be skipped
-  bool _shouldSkipRemainingRouteUpdate(
+  /// Determines if route update is needed
+  bool _shouldUpdateRoute(
       int? currentStepIndex, geo.Position? currentPosition) {
-    // Always update if no cache or step changed significantly
+    // Always update if no cache or step changed
     if (_lastStepIndex == null || currentStepIndex != _lastStepIndex) {
-      return false;
+      return true;
     }
 
-    // Skip if not enough time has passed (throttle updates for performance)
+    // Check time throttling
     final now = DateTime.now();
     if (_lastUpdateTime != null) {
       final timeDiff = now.difference(_lastUpdateTime!).inMilliseconds;
       if (timeDiff <
           nav_constants.RouteVisualizationConstants.routeUpdateIntervalMs) {
-        return true; // Skip this update
+        return false; // Too soon
       }
     }
 
-    // Skip if position hasn't moved significantly (avoid redundant updates)
+    // Check distance threshold
     if (currentPosition != null && _lastUpdatePosition != null) {
       final distance = MathUtils.calculateDistance(
         _lastUpdatePosition!.latitude,
@@ -133,59 +158,141 @@ class RouteVisualizationService {
         currentPosition.longitude,
       );
 
-      // Skip update if moved less than 0.5 meters (very sensitive for ultra-smooth tracing)
-      if (distance < 0.5) {
+      // Update if moved more than 1 meter
+      if (distance > 1.0) {
         return true;
       }
     }
 
-    return false; // Proceed with update
+    return false;
+  }
+
+  /// Finds the exact split point between traveled and remaining route
+  _RouteSplitPoint _findSplitPoint(
+      RouteData route, geo.Position currentPosition, int currentStepIndex) {
+    // Find the closest point on the route geometry to the user
+    double minDistance = double.infinity;
+    int closestIndex = 0;
+    geo.Position? projectedPosition;
+
+    for (int i = 0; i < route.geometry.length - 1; i++) {
+      final segmentStart = route.geometry[i];
+      final segmentEnd = route.geometry[i + 1];
+
+      // Project user position onto this segment
+      final projection = _projectPointOntoSegment(
+        currentPosition,
+        segmentStart,
+        segmentEnd,
+      );
+
+      final distance = MathUtils.calculateDistance(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        projection.latitude,
+        projection.longitude,
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+        projectedPosition = projection;
+      }
+    }
+
+    return _RouteSplitPoint(
+      geometryIndex: closestIndex,
+      projectedPosition: projectedPosition ?? currentPosition,
+    );
+  }
+
+  /// Creates GeoJSON for the full route
+  Map<String, dynamic> _createFullRouteGeoJson(RouteData route) {
+    final coordinates = route.geometry
+        .map((waypoint) => [waypoint.longitude, waypoint.latitude])
+        .toList();
+
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': coordinates,
+          },
+          'properties': {
+            'route_id': route.hashCode.toString(),
+          },
+        }
+      ],
+    };
+  }
+
+  /// Creates GeoJSON for the traveled portion of the route
+  Map<String, dynamic> _createTraveledRouteGeoJson(
+      RouteData route, int splitIndex, geo.Position currentPosition) {
+    if (splitIndex <= 0) {
+      // No traveled portion yet
+      return {'type': 'FeatureCollection', 'features': []};
+    }
+
+    // Get all points up to the split point
+    final traveledPoints = route.geometry.take(splitIndex + 1).toList();
+
+    // Add user's current position as the last point
+    final coordinates = <List<double>>[];
+    coordinates.addAll(traveledPoints
+        .map((waypoint) => [waypoint.longitude, waypoint.latitude])
+        .toList());
+    coordinates.add([currentPosition.longitude, currentPosition.latitude]);
+
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': coordinates,
+          },
+          'properties': {
+            'route_id': route.hashCode.toString(),
+            'traveled': true,
+          },
+        }
+      ],
+    };
   }
 
   /// Creates GeoJSON for the remaining portion of the route
   Map<String, dynamic> _createRemainingRouteGeoJson(
-      RouteData route, int? currentStepIndex, geo.Position? currentPosition) {
-    if (currentStepIndex == null || currentStepIndex >= route.steps.length) {
-      // Show full route if no progress or completed
-      return json.decode(RouteUtils.routeToGeoJson(route));
-    }
+      RouteData route,
+      int splitIndex,
+      geo.Position currentPosition,
+      geo.Position? projectedPosition) {
+    // Get remaining points from the split
+    final remainingPoints = route.geometry.skip(splitIndex + 1).toList();
 
-    // Determine the split point for the route
-    int startGeometryIndex;
-
-    if (currentPosition != null) {
-      // Use current position for more accurate route splitting
-      startGeometryIndex =
-          _findClosestGeometryIndex(route.geometry, currentPosition);
-    } else {
-      // Fallback to using step start position
-      final remainingSteps = route.steps.skip(currentStepIndex).toList();
-      if (remainingSteps.isEmpty) {
-        return {'type': 'FeatureCollection', 'features': []};
-      }
-
-      final firstRemainingStep = remainingSteps.first;
-      startGeometryIndex = _findClosestGeometryIndex(
-          route.geometry, firstRemainingStep.startLocation);
-    }
-
-    // Create remaining geometry from the actual route geometry
-    final remainingGeometry = route.geometry.skip(startGeometryIndex).toList();
-
-    if (remainingGeometry.isEmpty) {
+    if (remainingPoints.isEmpty) {
+      // User is at the end of the route
       return {'type': 'FeatureCollection', 'features': []};
     }
 
-    // Start coordinates with current position for perfect alignment with user puck
+    // Start from user's current position for perfect connection
     final coordinates = <List<double>>[];
+    coordinates.add([currentPosition.longitude, currentPosition.latitude]);
 
-    // Insert user's current position as the first point for perfect alignment
-    if (currentPosition != null) {
-      coordinates.add([currentPosition.longitude, currentPosition.latitude]);
+    // If we have a projected position that's different, add it for smooth transition
+    if (projectedPosition != null &&
+        (projectedPosition.longitude != currentPosition.longitude ||
+            projectedPosition.latitude != currentPosition.latitude)) {
+      coordinates
+          .add([projectedPosition.longitude, projectedPosition.latitude]);
     }
 
-    // Add remaining route geometry
-    coordinates.addAll(remainingGeometry
+    // Add all remaining route points
+    coordinates.addAll(remainingPoints
         .map((waypoint) => [waypoint.longitude, waypoint.latitude])
         .toList());
 
@@ -207,30 +314,53 @@ class RouteVisualizationService {
     };
   }
 
-  /// Finds the closest point in route geometry to a given position
-  int _findClosestGeometryIndex(
-      List<Waypoint> geometry, geo.Position targetPosition) {
-    if (geometry.isEmpty) return 0;
+  /// Projects a point onto a line segment
+  geo.Position _projectPointOntoSegment(
+      geo.Position point, Waypoint segmentStart, Waypoint segmentEnd) {
+    // Convert to local coordinate system for projection
+    final dx = segmentEnd.longitude - segmentStart.longitude;
+    final dy = segmentEnd.latitude - segmentStart.latitude;
 
-    double minDistance = double.infinity;
-    int closestIndex = 0;
-
-    for (int i = 0; i < geometry.length; i++) {
-      final waypoint = geometry[i];
-      final distance = MathUtils.calculateDistance(
-        waypoint.latitude,
-        waypoint.longitude,
-        targetPosition.latitude,
-        targetPosition.longitude,
+    if (dx == 0 && dy == 0) {
+      // Segment start and end are the same point
+      return geo.Position(
+        latitude: segmentStart.latitude,
+        longitude: segmentStart.longitude,
+        timestamp: DateTime.now(),
+        accuracy: 5.0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
       );
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = i;
-      }
     }
 
-    return closestIndex;
+    // Calculate projection factor (0 = start, 1 = end)
+    final t = ((point.longitude - segmentStart.longitude) * dx +
+            (point.latitude - segmentStart.latitude) * dy) /
+        (dx * dx + dy * dy);
+
+    // Clamp t to [0, 1] to keep projection on the segment
+    final clampedT = t.clamp(0.0, 1.0);
+
+    // Calculate projected position
+    final projectedLat = segmentStart.latitude + clampedT * dy;
+    final projectedLng = segmentStart.longitude + clampedT * dx;
+
+    return geo.Position(
+      latitude: projectedLat,
+      longitude: projectedLng,
+      timestamp: point.timestamp,
+      accuracy: point.accuracy,
+      altitude: point.altitude,
+      altitudeAccuracy: point.altitudeAccuracy,
+      heading: point.heading,
+      headingAccuracy: point.headingAccuracy,
+      speed: point.speed,
+      speedAccuracy: point.speedAccuracy,
+    );
   }
 
   /// Clears the current route from the map
@@ -265,7 +395,7 @@ class RouteVisualizationService {
       // Add empty GeoJSON sources for routes
       const emptyGeoJson = {'type': 'FeatureCollection', 'features': []};
 
-      // Route source for the main route
+      // Route source for the full/traveled route
       await _mapboxMap!.style.addSource(
         GeoJsonSource(id: _routeSourceId, data: jsonEncode(emptyGeoJson)),
       );
@@ -277,9 +407,9 @@ class RouteVisualizationService {
       );
 
       // Add layers in the correct order (bottom to top)
-      // Note: Layers are rendered in the order they are added, with later layers on top
+      // The Mapbox SDK renders layers in the order they are added
 
-      // 1. Route border layer (wider, dark outline)
+      // 1. Route border layer (wider, dark outline) - bottommost
       await _mapboxMap!.style.addLayer(
         LineLayer(
           id: _routeBorderLayerId,
@@ -288,11 +418,11 @@ class RouteVisualizationService {
           lineWidth: nav_constants.RouteVisualizationConstants.routeBorderWidth,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
-          lineOpacity: 0.7,
+          lineOpacity: 0.5,
         ),
       );
 
-      // 2. Traveled route (dimmed/gray)
+      // 2. Traveled route (dimmed/gray) - middle layer
       await _mapboxMap!.style.addLayer(
         LineLayer(
           id: '$_routeLayerId-traveled',
@@ -303,11 +433,11 @@ class RouteVisualizationService {
               nav_constants.RouteVisualizationConstants.routeTraveledWidth,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
-          lineOpacity: 0.7,
+          lineOpacity: 0.4,
         ),
       );
 
-      // 3. Remaining route (bright blue, thick like production apps)
+      // 3. Remaining route (bright blue) - top route layer
       await _mapboxMap!.style.addLayer(
         LineLayer(
           id: _routeLayerId,
@@ -322,13 +452,13 @@ class RouteVisualizationService {
         ),
       );
 
-      // Ensure location puck stays on top by refreshing location settings
-      await _refreshLocationPuck();
+      // Force location puck to top
+      await _ensureLocationPuckOnTop();
     } catch (e) {
-      // If layer positioning fails, add without positioning
+      // If layer positioning fails, add without specific ordering
       try {
         await _setupRouteLayersSimple();
-        await _refreshLocationPuck();
+        await _ensureLocationPuckOnTop();
       } catch (fallbackError) {
         throw RouteVisualizationException(
             'Failed to setup route layers: $e, fallback also failed: $fallbackError');
@@ -336,19 +466,36 @@ class RouteVisualizationService {
     }
   }
 
-  /// Refreshes the location puck to ensure it appears on top of route layers
-  Future<void> _refreshLocationPuck() async {
+  /// Ensures the location puck stays on top of all route layers
+  Future<void> _ensureLocationPuckOnTop() async {
     if (_mapboxMap == null) return;
 
     try {
       // Get current location settings
       final currentSettings = await _mapboxMap!.location.getSettings();
 
-      // Re-apply the settings to refresh the location layer positioning
-      await _mapboxMap!.location.updateSettings(currentSettings);
+      // Force the location puck to render on top by updating settings
+      // with explicit layer positioning
+      await _mapboxMap!.location.updateSettings(
+        LocationComponentSettings(
+          enabled: currentSettings.enabled,
+          pulsingEnabled: currentSettings.pulsingEnabled,
+          puckBearingEnabled: currentSettings.puckBearingEnabled,
+          showAccuracyRing: currentSettings.showAccuracyRing,
+          locationPuck: currentSettings.locationPuck,
+          layerAbove:
+              _routeLayerId, // Explicitly place above our top route layer
+          layerBelow: null, // No layer above the puck
+        ),
+      );
     } catch (e) {
-      // Silently ignore location puck refresh errors
-      // This is a best-effort attempt to keep the puck visible
+      // Fall back to simple refresh if explicit positioning fails
+      try {
+        final currentSettings = await _mapboxMap!.location.getSettings();
+        await _mapboxMap!.location.updateSettings(currentSettings);
+      } catch (refreshError) {
+        // Silently ignore - location puck positioning is best-effort
+      }
     }
   }
 
@@ -493,7 +640,7 @@ class RouteVisualizationService {
     if (route.geometry.isNotEmpty) {
       final geometryToHash = [
         ...route.geometry.take(3),
-        ...route.geometry.skip(max(0, route.geometry.length - 3)),
+        ...route.geometry.skip(math.max(0, route.geometry.length - 3)),
       ];
 
       for (final point in geometryToHash) {
@@ -507,7 +654,6 @@ class RouteVisualizationService {
 
   /// Clears cache
   void _clearCache() {
-    _cachedFullRouteGeoJson = null;
     _lastStepIndex = null;
     _lastRouteHash = null;
   }
@@ -528,6 +674,17 @@ class RouteVisualizationService {
 
   /// Whether the service is properly initialized
   bool get isInitialized => _isInitialized;
+}
+
+/// Data class for route split point
+class _RouteSplitPoint {
+  final int geometryIndex;
+  final geo.Position projectedPosition;
+
+  _RouteSplitPoint({
+    required this.geometryIndex,
+    required this.projectedPosition,
+  });
 }
 
 /// Exception thrown by route visualization operations
