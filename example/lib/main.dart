@@ -122,6 +122,7 @@ class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
                 ),
                 zoom: 12.0,
               ),
+              showSpeedLimit: true,
               styleUri: MapboxStyles.MAPBOX_STREETS,
               onMapReady: _onMapReady,
               onNavigationStateChanged: _onNavigationStateChanged,

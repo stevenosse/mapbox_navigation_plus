@@ -45,6 +45,25 @@ class NavigationController {
   // Route visualization callback
   RouteVisualizationCallback? _routeVisualizationCallback;
 
+  // Route recalculation optimization
+  DateTime? _lastRecalculationTime;
+  geo.Position? _lastKnownGoodPosition;
+  int _consecutiveOffRouteCount = 0;
+  static const int _offRouteThreshold = 3; // Must be off-route for 3 consecutive updates
+  static const Duration _recalculationCooldown = Duration(seconds: 5);
+  
+  // State update optimization
+  geo.Position? _lastStateUpdatePosition;
+  DateTime? _lastStateUpdateTime;
+  static const double _minStateUpdateDistance = 2.0; // meters
+  static const Duration _minStateUpdateInterval = Duration(milliseconds: 500);
+  
+  // Visualization update optimization
+  geo.Position? _lastVisualizationPosition;
+  DateTime? _lastVisualizationTime;
+  static const double _minVisualizationUpdateDistance = 1.0; // meters
+  static const Duration _minVisualizationUpdateInterval = Duration(milliseconds: 100);
+
   // Stream controllers for state updates
   final StreamController<NavigationState> _stateController =
       StreamController<NavigationState>.broadcast();
@@ -416,6 +435,12 @@ class NavigationController {
   /// Handles location updates during navigation
   Future<void> _handleLocationUpdate(geo.Position position) async {
     if (!isNavigating || _currentRoute == null) return;
+    
+    // Validate position before processing
+    if (!_isValidPosition(position)) {
+      // Skip invalid positions but don't stop navigation
+      return;
+    }
 
     final route = _currentRoute!;
     final currentStep = route.currentStep;
@@ -450,10 +475,22 @@ class NavigationController {
       return;
     }
 
-    // Check if user is off route
+    // Check if user is off route with improved tolerance
     if (!currentStep.isOnPath(position)) {
-      await _handleOffRoute(position);
-      return;
+      // Check distance to route before declaring off-route
+      final distanceToRoute = _calculateDistanceToRoute(position, currentStep);
+      
+      if (distanceToRoute > nav_constants.NavigationConstants.offRouteThreshold) {
+        await _handleOffRoute(position);
+        return;
+      } else {
+        // User is slightly off but within tolerance, reset counter
+        _consecutiveOffRouteCount = 0;
+      }
+    } else {
+      // User is on route, reset off-route counter
+      _consecutiveOffRouteCount = 0;
+      _lastKnownGoodPosition = position;
     }
 
     // Announce step
@@ -508,6 +545,35 @@ class NavigationController {
 
   /// Handles when user goes off the planned route
   Future<void> _handleOffRoute(geo.Position position) async {
+    // Implement throttling to prevent excessive recalculations
+    final now = DateTime.now();
+    if (_lastRecalculationTime != null) {
+      final timeSinceLastRecalc = now.difference(_lastRecalculationTime!);
+      if (timeSinceLastRecalc < _recalculationCooldown) {
+        // Too soon to recalculate, just update visualization
+        await updateRouteVisualization(
+          currentPosition: position,
+          currentStepIndex: currentStepIndex,
+        );
+        return;
+      }
+    }
+
+    // Check if we're consistently off-route (not just GPS noise)
+    _consecutiveOffRouteCount++;
+    if (_consecutiveOffRouteCount < _offRouteThreshold) {
+      // Not consistently off-route yet, wait for more confirmations
+      await updateRouteVisualization(
+        currentPosition: position,
+        currentStepIndex: currentStepIndex,
+      );
+      return;
+    }
+
+    // Reset counter and proceed with recalculation
+    _consecutiveOffRouteCount = 0;
+    _lastRecalculationTime = now;
+
     // Determine if we should use traffic data for recalculation
     final useTraffic = _currentRoute?.hasTrafficData == true;
 
@@ -535,15 +601,20 @@ class NavigationController {
   void _updateNavigationProgress(geo.Position position) {
     if (_currentRoute == null) return;
 
-    // Update navigation state with new position-based calculations
-    _updateState(NavigationState.navigating(
-      route: _currentRoute!,
-      currentPosition: Waypoint.fromPosition(position),
-      currentSpeed: position.speed,
-      currentBearing: position.heading >= 0 ? position.heading : 0.0,
-    ));
+    // Only update state if position has changed significantly (optimization)
+    final shouldUpdateState = _shouldUpdateNavigationState(position);
+    
+    if (shouldUpdateState) {
+      // Update navigation state with new position-based calculations
+      _updateState(NavigationState.navigating(
+        route: _currentRoute!,
+        currentPosition: Waypoint.fromPosition(position),
+        currentSpeed: position.speed,
+        currentBearing: position.heading >= 0 ? position.heading : 0.0,
+      ));
+    }
 
-    // Update camera position for smooth tracking
+    // Always update camera for smooth tracking (non-blocking)
     _cameraController.updateCamera(
       userPosition: position,
       userBearing: position.heading >= 0 ? position.heading : null,
@@ -553,7 +624,12 @@ class NavigationController {
     // Trigger route visualization update based on location change
     final stepIndex = currentStepIndex;
     if (_routeVisualizationCallback != null && stepIndex != null) {
-      _routeVisualizationCallback!(_currentRoute!, stepIndex, position);
+      // Only call visualization callback if position changed enough
+      if (_shouldTriggerVisualizationUpdate(position)) {
+        _routeVisualizationCallback!(_currentRoute!, stepIndex, position);
+        _lastVisualizationPosition = position;
+        _lastVisualizationTime = DateTime.now();
+      }
     }
   }
 
@@ -561,6 +637,147 @@ class NavigationController {
   void _updateState(NavigationState newState) {
     _currentState = newState;
     _stateController.add(newState);
+  }
+
+  /// Calculates minimum distance from position to route geometry
+  double _calculateDistanceToRoute(
+      geo.Position position, NavigationStep step) {
+    if (step.geometry.isEmpty) {
+      return double.infinity;
+    }
+
+    double minDistance = double.infinity;
+    for (final point in step.geometry) {
+      final distance = geo.Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+      }
+    }
+    return minDistance;
+  }
+  
+  /// Determines if navigation state should be updated based on position changes
+  bool _shouldUpdateNavigationState(geo.Position position) {
+    final now = DateTime.now();
+    
+    // First update
+    if (_lastStateUpdatePosition == null || _lastStateUpdateTime == null) {
+      _lastStateUpdatePosition = position;
+      _lastStateUpdateTime = now;
+      return true;
+    }
+    
+    // Check time since last update
+    final timeSinceLastUpdate = now.difference(_lastStateUpdateTime!);
+    if (timeSinceLastUpdate < _minStateUpdateInterval) {
+      return false; // Too soon
+    }
+    
+    // Check distance since last update
+    final distance = geo.Geolocator.distanceBetween(
+      _lastStateUpdatePosition!.latitude,
+      _lastStateUpdatePosition!.longitude,
+      position.latitude,
+      position.longitude,
+    );
+    
+    if (distance < _minStateUpdateDistance) {
+      return false; // Not moved enough
+    }
+    
+    _lastStateUpdatePosition = position;
+    _lastStateUpdateTime = now;
+    return true;
+  }
+  
+  /// Determines if route visualization should be updated
+  bool _shouldTriggerVisualizationUpdate(geo.Position position) {
+    final now = DateTime.now();
+    
+    // First update
+    if (_lastVisualizationPosition == null || _lastVisualizationTime == null) {
+      return true;
+    }
+    
+    // Check time since last update
+    final timeSinceLastUpdate = now.difference(_lastVisualizationTime!);
+    if (timeSinceLastUpdate < _minVisualizationUpdateInterval) {
+      return false; // Too soon
+    }
+    
+    // Check distance since last update
+    final distance = geo.Geolocator.distanceBetween(
+      _lastVisualizationPosition!.latitude,
+      _lastVisualizationPosition!.longitude,
+      position.latitude,
+      position.longitude,
+    );
+    
+    return distance >= _minVisualizationUpdateDistance;
+  }
+  
+  /// Validates if a position is reasonable for navigation
+  bool _isValidPosition(geo.Position position) {
+    // Check latitude bounds
+    if (position.latitude.abs() > 90) {
+      return false;
+    }
+    
+    // Check longitude bounds
+    if (position.longitude.abs() > 180) {
+      return false;
+    }
+    
+    // Check for NaN or infinite values
+    if (position.latitude.isNaN || position.latitude.isInfinite ||
+        position.longitude.isNaN || position.longitude.isInfinite) {
+      return false;
+    }
+    
+    // Check for suspicious (0,0) coordinates
+    if (position.latitude == 0 && position.longitude == 0) {
+      // Unless we were already near (0,0)
+      if (_lastKnownGoodPosition != null) {
+        final distance = geo.Geolocator.distanceBetween(
+          _lastKnownGoodPosition!.latitude,
+          _lastKnownGoodPosition!.longitude,
+          0,
+          0,
+        );
+        // If suddenly at (0,0) from far away, it's an error
+        if (distance > 100000) { // 100km
+          return false;
+        }
+      }
+    }
+    
+    // Check for unrealistic jumps (teleportation)
+    if (_lastKnownGoodPosition != null) {
+      final distance = geo.Geolocator.distanceBetween(
+        _lastKnownGoodPosition!.latitude,
+        _lastKnownGoodPosition!.longitude,
+        position.latitude,
+        position.longitude,
+      );
+      
+      // Check time since last position
+      final timeDiff = position.timestamp.difference(_lastKnownGoodPosition!.timestamp);
+      if (timeDiff.inSeconds > 0) {
+        final speed = distance / timeDiff.inSeconds; // meters per second
+        
+        // If speed is unrealistic (> 500 m/s ~ 1800 km/h), position is invalid
+        if (speed > 500) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
   }
 
   /// Disposes resources and closes streams
