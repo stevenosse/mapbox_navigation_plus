@@ -1,230 +1,481 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:mapbox_navigation/mapbox_navigation.dart';
-
-// Mapbox access token
-String mapboxAccessToken = '';
-
-Future<void> loadMapboxAccessToken() async {
-  try {
-    final fileContent = await rootBundle.loadString('assets/credentials.json');
-    final credentials = json.decode(fileContent) as Map<String, dynamic>;
-    mapboxAccessToken = credentials['MAPBOX_ACCESS_TOKEN'];
-  } catch (e) {
-    debugPrint('Error loading Mapbox access token: $e');
-  }
-}
+import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
+import 'config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await loadMapboxAccessToken();
+  await Config.instance.loadVariables();
 
-  WidgetsFlutterBinding.ensureInitialized();
-  MapboxOptions.setAccessToken(mapboxAccessToken);
-  runApp(const NavigationExampleApp());
+  if (!Config.instance.isMapboxConfigured) {
+    throw Exception(
+      'Mapbox access token not configured. Please edit variables.json',
+    );
+  }
+
+  MapboxOptions.setAccessToken(Config.instance.mapboxAccessToken);
+  runApp(const MyApp());
 }
 
-class NavigationExampleApp extends StatelessWidget {
-  const NavigationExampleApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mapbox Navigation',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const NavigationExampleScreen(),
+      title: 'Mapbox Navigation Demo',
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      home: const NavigationDemo(),
     );
   }
 }
 
-class NavigationExampleScreen extends StatefulWidget {
-  const NavigationExampleScreen({super.key});
+class NavigationDemo extends StatefulWidget {
+  const NavigationDemo({super.key});
 
   @override
-  State<NavigationExampleScreen> createState() =>
-      _NavigationExampleScreenState();
+  State<NavigationDemo> createState() => _NavigationDemoState();
 }
 
-class _NavigationExampleScreenState extends State<NavigationExampleScreen> {
+class _NavigationDemoState extends State<NavigationDemo>
+    implements NavigationEventListener {
+  // Mapbox access token is loaded from variables.json
+  // Get your token from: https://account.mapbox.com/access-tokens/
+  String get _mapboxAccessToken => Config.instance.mapboxAccessToken;
+
   NavigationController? _navigationController;
+  MapboxMapController? _mapController;
 
-  final Waypoint _origin = Waypoint(
-    latitude: 37.7749,
-    longitude: -122.4194,
-    name: 'San Francisco, CA',
+  // Demo destination (San Francisco area)
+  final LocationPoint _destination = LocationPoint.fromLatLng(
+    37.7849,
+    -122.4094,
   );
 
-  final Waypoint _destination = Waypoint(
-    latitude: 34.0522,
-    longitude: -118.2437,
-    name: 'Los Angeles, CA',
-  );
+  // Current user location
+  LocationPoint? _currentLocation;
 
-  bool _isNavigating = false;
-  NavigationState _navigationState = NavigationState.idle();
+  NavigationState _currentState = NavigationState.idle;
+  RouteProgress? _currentProgress;
+  String _statusMessage = 'Ready to navigate';
+  bool _isLoading = false;
+
+  // Route styling options
+  RouteStyleConfig _currentRouteStyle = RouteStyleConfig.defaultConfig;
+  int _selectedStyleIndex = 0;
+  
+  // Location puck styling options
+  final LocationPuckConfig _currentLocationPuckStyle = LocationPuckThemes.defaultTheme;
+  
+  // Destination pin styling options
+  final DestinationPinConfig _currentDestinationPinStyle = DestinationPinConfig.defaultConfig;
+  
+  final List<RouteStyleConfig> _routeStyles = [
+    RouteStyleConfig.defaultConfig,
+    RouteStyleThemes.darkTheme,
+    RouteStyleThemes.highContrastTheme,
+    const RouteStyleConfig(
+      routeLineStyle: RouteLineStyle(
+        color: Color(0xFFFF6600),
+        width: 14.0,
+        opacity: 0.9,
+        capStyle: LineCapStyle.round,
+        joinStyle: LineJoinStyle.round,
+      ),
+      traveledLineStyle: RouteLineStyle(
+        color: Color(0xFF888888),
+        width: 14.0,
+        opacity: 0.7,
+        capStyle: LineCapStyle.round,
+        joinStyle: LineJoinStyle.round,
+      ),
+      remainingLineStyle: RouteLineStyle(
+        color: Color(0xFFFF9900),
+        width: 14.0,
+        opacity: 1.0,
+        capStyle: LineCapStyle.round,
+        joinStyle: LineJoinStyle.round,
+      ),
+    ),
+  ];
+  
+  final List<String> _styleNames = [
+    'Default',
+    'Dark Theme',
+    'High Contrast',
+    'Custom Orange',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConfiguration();
+    _statusMessage = 'Tap "Start Navigation" to begin';
+  }
+
+  void _checkConfiguration() {
+    if (!Config.instance.isMapboxConfigured) {
+      setState(() {
+        _statusMessage =
+            '⚠️ Mapbox token not configured. Please edit variables.json';
+      });
+    }
+  }
+
+  Future<void> _initCurrentLocation() async {
+    try {
+      final location = await _navigationController?.locationProvider
+          .getCurrentLocation();
+      if (location != null) {
+        setState(() {
+          _currentLocation = location;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error getting current location: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _navigationController?.removeNavigationListener(this);
+    _navigationController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapbox Navigation Example'),
+        title: const Text('Mapbox Navigation Demo'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Navigation Controls
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Navigation Status: ${_navigationState.status.name}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Row(
+          // Map widget
+          NavigationView(
+            mapboxAccessToken: _mapboxAccessToken,
+            initialCenter:
+                _currentLocation ??
+                _destination, // Use current location or fallback to destination
+            initialZoom: 17.0,
+            routeProgress: _currentProgress,
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _initializeNavigation();
+            },
+          ),
+
+          // Navigation controls overlay
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isNavigating ? null : _startNavigation,
-                        child: const Text('Start Navigation'),
-                      ),
+                    Text(
+                      'Status: ${_currentState.description}',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isNavigating ? _stopNavigation : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Stop Navigation'),
+                    const SizedBox(height: 8),
+                    Text(
+                      _statusMessage,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (_currentProgress != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Remaining: ${_currentProgress!.formattedDistanceRemaining}',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
+                      Text(
+                        'ETA: ${_currentProgress!.formattedETA}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    
+                    // Route Style Selection
+                    Text(
+                      'Route Style:',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButton<int>(
+                      value: _selectedStyleIndex,
+                      isExpanded: true,
+                      items: _styleNames.asMap().entries.map((entry) {
+                        return DropdownMenuItem<int>(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        );
+                      }).toList(),
+                      onChanged: (int? newIndex) {
+                        if (newIndex != null) {
+                          setState(() {
+                            _selectedStyleIndex = newIndex;
+                            _currentRouteStyle = _routeStyles[newIndex];
+                          });
+                          // Update the navigation controller with new style
+                          _navigationController?.updateRouteStyleConfig(_currentRouteStyle);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    Row(
+                      children: [
+                        if (!_isLoading && _currentState.canStart)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _startNavigation,
+                              child: const Text('Start Navigation'),
+                            ),
+                          ),
+                        if (_currentState.canPause)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _pauseNavigation,
+                              child: const Text('Pause'),
+                            ),
+                          ),
+                        if (_currentState.canResume)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _resumeNavigation,
+                              child: const Text('Resume'),
+                            ),
+                          ),
+                        if (_currentState.canStop)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _stopNavigation,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Stop'),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-          // Mapbox Navigation View
-          Expanded(
-            child: MapboxNavigationView(
-              accessToken: mapboxAccessToken,
-              initialCameraPosition: CameraOptions(
-                center: Point(
-                  coordinates: Position(_origin.longitude, _origin.latitude),
+
+          // Loading indicator
+          if (_isLoading)
+            const Positioned(
+              top: 16,
+              right: 16,
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(),
                 ),
-                zoom: 12.0,
               ),
-              showSpeedLimit: true,
-              styleUri: MapboxStyles.MAPBOX_STREETS,
-              onMapReady: _onMapReady,
-              onNavigationStateChanged: _onNavigationStateChanged,
-              onStepChanged: _onStepChanged,
-              onError: _onError,
-              voiceSettings: const VoiceSettings(
-                enabled: true,
-                speechRate: 0.5,
-                pitch: 1.0,
-                volume: 0.8,
-                language: 'en-US',
-                minimumInterval: 5,
-                announcementDistances: [1000, 500, 100],
-                announceArrival: true,
-                announceRouteRecalculation: true,
-              ),
-              enableTrafficData: true,
-              simulationSpeed: 1.0, // Normal speed for real navigation
             ),
-          ),
+
+          // Re-center button
+          if (_currentState.isActive)
+            Positioned(
+              bottom: 100,
+              right: 16,
+              child: FloatingActionButton(
+                onPressed: _recenterMap,
+                child: const Icon(Icons.my_location),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  void _onMapReady(NavigationController navigationController) {
-    setState(() {
-      _navigationController = navigationController;
-    });
+  Future<void> _initializeNavigation() async {
+    if (_mapController == null) return;
+
+    // Create real implementations for actual navigation
+    final locationProvider = DefaultLocationProvider();
+    final progressTracker = DefaultRouteProgressTracker();
+    final voiceGuidance = DefaultVoiceGuidance();
+
+    // Initialize voice guidance
+    try {
+      await voiceGuidance.initialize();
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Voice guidance init failed: $e';
+      });
+    }
+
+    _navigationController = NavigationController(
+      routingEngine: MapboxRoutingEngine(accessToken: _mapboxAccessToken),
+      locationProvider: locationProvider,
+      progressTracker: progressTracker,
+      voiceGuidance: voiceGuidance,
+      mapController: _mapController!,
+      routeStyleConfig: _currentRouteStyle,
+      locationPuckConfig: _currentLocationPuckStyle,
+      destinationPinConfig: _currentDestinationPinStyle,
+    );
+
+    _navigationController!.addNavigationListener(this);
 
     // Listen to navigation state changes
     _navigationController!.stateStream.listen((state) {
-      if (mounted) {
-        setState(() {
-          _navigationState = state;
-          _isNavigating = state.status == NavigationStatus.navigating;
-        });
-      }
+      setState(() {
+        _currentState = state;
+      });
     });
-  }
 
-  void _onNavigationStateChanged(NavigationState state) {
-    debugPrint('Navigation state changed: $state');
-  }
+    // Listen to progress updates
+    _navigationController!.progressStream.listen((progress) {
+      setState(() {
+        _currentProgress = progress;
+      });
+    });
 
-  void _onStepChanged(NavigationStep step) {
-    debugPrint('Navigation step: ${step.instruction}');
-  }
+    // Listen to errors
+    _navigationController!.errorStream.listen((error) {
+      setState(() {
+        _statusMessage = 'Error: ${error.message}';
+        _isLoading = false;
+      });
+    });
 
-  void _onError(String error) {
-    debugPrint('Navigation error: $error');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Navigation error: $error'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    // Get current location for navigation
+    try {
+      await _initCurrentLocation();
+
+      await _navigationController!.initializeLocation();
+
+      locationProvider.locationStream.listen((location) {
+        if (_currentLocation == null) {
+          setState(() {
+            _currentLocation = location;
+            _statusMessage = 'Current location acquired. Ready to navigate!';
+          });
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Failed to get location: $e';
+      });
+    }
   }
 
   Future<void> _startNavigation() async {
-    if (_navigationController == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Navigation controller not ready'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (_navigationController == null) return;
+
+    // Ensure we have current location
+    if (_currentLocation == null) {
+      setState(() {
+        _statusMessage = 'Waiting for current location...';
+      });
       return;
     }
 
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Calculating route...';
+    });
+
     try {
-      await _navigationController!.startNavigation(
-        origin: _origin,
+      final result = await _navigationController!.startNavigation(
+        origin: _currentLocation!, // Use current location as origin
         destination: _destination,
-        profile: 'driving-traffic', // Use traffic-aware routing
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to start navigation: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+      if (result.success) {
+        setState(() {
+          _statusMessage = 'Navigation started! Following route...';
+        });
+      } else {
+        setState(() {
+          _statusMessage = 'Failed to start navigation: ${result.message}';
+        });
       }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _stopNavigation() async {
-    if (_navigationController == null) return;
+  Future<void> _pauseNavigation() async {
+    await _navigationController?.pauseNavigation();
+    setState(() {
+      _statusMessage = 'Navigation paused';
+    });
+  }
 
-    try {
-      await _navigationController!.stopNavigation();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to stop navigation: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  Future<void> _resumeNavigation() async {
+    await _navigationController?.resumeNavigation();
+    setState(() {
+      _statusMessage = 'Navigation resumed';
+    });
+  }
+
+  Future<void> _stopNavigation() async {
+    await _navigationController?.stopNavigation();
+    setState(() {
+      _statusMessage = 'Navigation stopped';
+      _currentProgress = null;
+    });
+  }
+
+  Future<void> _recenterMap() async {
+    await _navigationController?.recenterMap();
+  }
+
+  // NavigationEventListener implementation
+  @override
+  void onNavigationStateChanged(NavigationState state) {
+    setState(() {
+      _currentState = state;
+    });
+  }
+
+  @override
+  void onRouteProgressChanged(RouteProgress progress) {
+    // Progress updates are handled via stream listener above
+  }
+
+  @override
+  void onUpcomingManeuver(Maneuver maneuver) {
+    setState(() {
+      _statusMessage = 'Upcoming: ${maneuver.instruction}';
+    });
+  }
+
+  @override
+  void onInstruction(String instruction) {
+    setState(() {
+      _statusMessage = instruction;
+    });
+  }
+
+  @override
+  void onError(NavigationError error) {
+    setState(() {
+      _statusMessage = 'Error: ${error.message}';
+    });
+  }
+
+  @override
+  void onArrival() {
+    setState(() {
+      _statusMessage = 'You have arrived at your destination!';
+    });
   }
 }

@@ -1,29 +1,23 @@
-name: navigation_example
-description: A comprehensive example demonstrating Mapbox Navigation package features.
-version: 1.0.0+1
-publish_to: none
+name: example
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: '>=3.0.0'
+  sdk: ^3.9.2
 
 dependencies:
   flutter:
     sdk: flutter
-  
-  # Mapbox Navigation Package (local dependency)
-  mapbox_navigation:
+  mapbox_navigation_plus:
     path: ../
-  
-  # UI and utility packages
-  cupertino_icons: ^1.0.6
-  
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
+
   assets:
-    - assets/credentials.json
+    - variables.json
