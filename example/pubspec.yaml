@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   mapbox_navigation_plus:
     path: ../
+  geocoding: ^3.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

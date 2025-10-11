@@ -78,9 +78,12 @@ void main() async {
 
 ### Basic Navigation Setup
 
+### Basic Navigation with Address Search
+
 ```dart
 import 'package:flutter/material.dart';
 import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
+import 'package:geocoding/geocoding.dart';
 
 class NavigationApp extends StatefulWidget {
   @override
@@ -90,6 +93,12 @@ class NavigationApp extends StatefulWidget {
 class _NavigationAppState extends State<NavigationApp> {
   NavigationController? _navigationController;
   MapboxMapController? _mapController;
+
+  // Address search functionality
+  final TextEditingController _addressController = TextEditingController();
+  LocationPoint? _destination;
+  String? _destinationAddress;
+  bool _isSearching = false;
 
   @override
   Widget build(BuildContext context) {
@@ -107,24 +116,61 @@ class _NavigationAppState extends State<NavigationApp> {
             },
           ),
 
-          // Navigation controls
+          // Address search and controls
           Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
+            top: 16,
+            left: 16,
+            right: 16,
             child: Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    ElevatedButton(
-                      onPressed: _startNavigation,
-                      child: Text('Start'),
+                    Text('Destination:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _addressController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter address or place name',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            onSubmitted: (value) => _searchAddress(value),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _isSearching ? null : () => _searchAddress(_addressController.text),
+                          child: _isSearching
+                              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : Text('Search'),
+                        ),
+                      ],
                     ),
-                    ElevatedButton(
-                      onPressed: _stopNavigation,
-                      child: Text('Stop'),
+
+                    if (_destinationAddress != null) ...[
+                      SizedBox(height: 8),
+                      Text('Selected: $_destinationAddress'),
+                    ],
+
+                    SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _destination != null ? _startNavigation : null,
+                          child: Text('Start Navigation'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _stopNavigation,
+                          child: Text('Stop'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -134,6 +180,51 @@ class _NavigationAppState extends State<NavigationApp> {
         ],
       ),
     );
+  }
+
+  // Address search using geocoding
+  Future<void> _searchAddress(String address) async {
+    if (address.trim().isEmpty) return;
+
+    setState(() => _isSearching = true);
+
+    try {
+      List<Location> locations = await locationFromAddress(address);
+
+      if (locations.isNotEmpty) {
+        final location = locations.first;
+        final destinationPoint = LocationPoint.fromLatLng(
+          location.latitude,
+          location.longitude,
+        );
+
+        // Get formatted address for display
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          location.latitude,
+          location.longitude,
+        );
+
+        setState(() {
+          _destination = destinationPoint;
+          _destinationAddress = placemarks.isNotEmpty
+              ? _formatAddress(placemarks.first)
+              : address;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isSearching = false);
+      // Handle error
+    }
+  }
+
+  String _formatAddress(Placemark placemark) {
+    final parts = <String>[];
+    if (placemark.street?.isNotEmpty == true) parts.add(placemark.street!);
+    if (placemark.locality?.isNotEmpty == true) parts.add(placemark.locality!);
+    if (placemark.administrativeArea?.isNotEmpty == true) parts.add(placemark.administrativeArea!);
+    if (placemark.country?.isNotEmpty == true) parts.add(placemark.country!);
+    return parts.join(', ');
   }
 
   Future<void> _initializeNavigation() async {
@@ -166,12 +257,14 @@ class _NavigationAppState extends State<NavigationApp> {
   }
 
   Future<void> _startNavigation() async {
-    final origin = LocationPoint.fromLatLng(37.7749, -122.4194); // San Francisco
-    final destination = LocationPoint.fromLatLng(37.7849, -122.4094); // Different SF location
+    if (_navigationController == null || _destination == null) return;
+
+    final currentLocation = await _navigationController!.locationProvider.getCurrentLocation();
+    if (currentLocation == null) return;
 
     final result = await _navigationController!.startNavigation(
-      origin: origin,
-      destination: destination,
+      origin: currentLocation,
+      destination: _destination!,
     );
 
     if (result.success) {
@@ -188,6 +281,7 @@ class _NavigationAppState extends State<NavigationApp> {
   @override
   void dispose() {
     _navigationController?.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 }

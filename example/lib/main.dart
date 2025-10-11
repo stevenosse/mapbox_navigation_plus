@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
+import 'package:geocoding/geocoding.dart';
 import 'config.dart';
 
 void main() async {
@@ -45,11 +46,13 @@ class _NavigationDemoState extends State<NavigationDemo>
   NavigationController? _navigationController;
   MapboxMapController? _mapController;
 
-  // Demo destination (San Francisco area)
-  final LocationPoint _destination = LocationPoint.fromLatLng(
-    37.7849,
-    -122.4094,
-  );
+  // Address input controllers
+  final TextEditingController _addressController = TextEditingController();
+  final FocusNode _addressFocusNode = FocusNode();
+
+  // Destination (will be set via address search)
+  LocationPoint? _destination;
+  String? _destinationAddress;
 
   // Current user location
   LocationPoint? _currentLocation;
@@ -58,6 +61,8 @@ class _NavigationDemoState extends State<NavigationDemo>
   RouteProgress? _currentProgress;
   String _statusMessage = 'Ready to navigate';
   bool _isLoading = false;
+  bool _isSearching = false;
+  bool _showControls = false;
 
   // Route styling options
   RouteStyleConfig _currentRouteStyle = RouteStyleConfig.defaultConfig;
@@ -109,7 +114,11 @@ class _NavigationDemoState extends State<NavigationDemo>
   void initState() {
     super.initState();
     _checkConfiguration();
-    _statusMessage = 'Tap "Start Navigation" to begin';
+    _statusMessage = 'Enter a destination address to begin';
+
+    // Set a default destination (San Francisco) for demo purposes
+    _destination = LocationPoint.fromLatLng(37.7849, -122.4094);
+    _destinationAddress = 'San Francisco, CA';
   }
 
   void _checkConfiguration() {
@@ -139,6 +148,8 @@ class _NavigationDemoState extends State<NavigationDemo>
   void dispose() {
     _navigationController?.removeNavigationListener(this);
     _navigationController?.dispose();
+    _addressController.dispose();
+    _addressFocusNode.dispose();
     super.dispose();
   }
 
@@ -148,6 +159,17 @@ class _NavigationDemoState extends State<NavigationDemo>
       appBar: AppBar(
         title: const Text('Mapbox Navigation Demo'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: Icon(_showControls ? Icons.visibility_off : Icons.visibility),
+            onPressed: () {
+              setState(() {
+                _showControls = !_showControls;
+              });
+            },
+            tooltip: _showControls ? 'Hide Controls' : 'Show Controls',
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -165,12 +187,13 @@ class _NavigationDemoState extends State<NavigationDemo>
             },
           ),
 
-          // Navigation controls overlay
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Card(
+          // Navigation controls overlay - only show when enabled
+          if (_showControls) ...[
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -186,6 +209,111 @@ class _NavigationDemoState extends State<NavigationDemo>
                       _statusMessage,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
+
+                    // Address search section
+                    const SizedBox(height: 16),
+                    Text(
+                      'Destination:',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _addressController,
+                            focusNode: _addressFocusNode,
+                            decoration: InputDecoration(
+                              hintText: 'Enter address or place name',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.search),
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_addressController.text.isNotEmpty)
+                                    IconButton(
+                                      icon: Icon(Icons.clear),
+                                      onPressed: () {
+                                        _addressController.clear();
+                                        setState(() {
+                                          _destination = null;
+                                          _destinationAddress = null;
+                                        });
+                                      },
+                                    ),
+                                  PopupMenuButton<String>(
+                                    icon: Icon(Icons.more_vert),
+                                    onSelected: (value) {
+                                      if (value == 'san_francisco') {
+                                        _addressController.text = 'San Francisco, CA';
+                                        _searchAddress('San Francisco, CA');
+                                      } else if (value == 'new_york') {
+                                        _addressController.text = 'New York, NY';
+                                        _searchAddress('New York, NY');
+                                      } else if (value == 'los_angeles') {
+                                        _addressController.text = 'Los Angeles, CA';
+                                        _searchAddress('Los Angeles, CA');
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'san_francisco',
+                                        child: Text('San Francisco, CA'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'new_york',
+                                        child: Text('New York, NY'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'los_angeles',
+                                        child: Text('Los Angeles, CA'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            onSubmitted: (value) => _searchAddress(value),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _isSearching
+                              ? null
+                              : () => _searchAddress(_addressController.text),
+                          child: _isSearching
+                              ? SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Text('Search'),
+                        ),
+                      ],
+                    ),
+
+                    if (_destinationAddress != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _destinationAddress!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_currentProgress != null) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -232,7 +360,7 @@ class _NavigationDemoState extends State<NavigationDemo>
                         if (!_isLoading && _currentState.canStart)
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: _startNavigation,
+                              onPressed: _destination != null ? _startNavigation : null,
                               child: const Text('Start Navigation'),
                             ),
                           ),
@@ -265,19 +393,41 @@ class _NavigationDemoState extends State<NavigationDemo>
                     ),
                   ],
                 ),
+                ),
               ),
             ),
-          ),
+          ],
 
-          // Loading indicator
+          // Loading indicator - show regardless of controls visibility
           if (_isLoading)
-            const Positioned(
+            Positioned(
               top: 16,
               right: 16,
               child: Card(
                 child: Padding(
                   padding: EdgeInsets.all(8.0),
                   child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
+
+          // Floating action buttons - always accessible
+          if (!_showControls && _currentState.canStart && _destination != null)
+            Positioned(
+              bottom: 20,
+              left: 20,
+              right: 20,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ElevatedButton.icon(
+                    onPressed: _startNavigation,
+                    icon: const Icon(Icons.navigation),
+                    label: const Text('Start Navigation'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: Size(double.infinity, 48),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -290,6 +440,19 @@ class _NavigationDemoState extends State<NavigationDemo>
               child: FloatingActionButton(
                 onPressed: _recenterMap,
                 child: const Icon(Icons.my_location),
+              ),
+            ),
+
+          // Quick search button (when controls are hidden)
+          if (!_showControls)
+            Positioned(
+              top: 16,
+              left: 16,
+              child: FloatingActionButton(
+                mini: true,
+                onPressed: _showQuickSearchDialog,
+                tooltip: 'Search Destination',
+                child: const Icon(Icons.search),
               ),
             ),
         ],
@@ -373,6 +536,14 @@ class _NavigationDemoState extends State<NavigationDemo>
   Future<void> _startNavigation() async {
     if (_navigationController == null) return;
 
+    // Validate destination
+    if (_destination == null) {
+      setState(() {
+        _statusMessage = 'Please search for and select a destination first';
+      });
+      return;
+    }
+
     // Ensure we have current location
     if (_currentLocation == null) {
       setState(() {
@@ -383,18 +554,18 @@ class _NavigationDemoState extends State<NavigationDemo>
 
     setState(() {
       _isLoading = true;
-      _statusMessage = 'Calculating route...';
+      _statusMessage = 'Calculating route to ${_destinationAddress ?? 'destination'}...';
     });
 
     try {
       final result = await _navigationController!.startNavigation(
         origin: _currentLocation!, // Use current location as origin
-        destination: _destination,
+        destination: _destination!,
       );
 
       if (result.success) {
         setState(() {
-          _statusMessage = 'Navigation started! Following route...';
+          _statusMessage = 'Navigation started! Following route to ${_destinationAddress ?? 'destination'}...';
         });
       } else {
         setState(() {
@@ -403,7 +574,7 @@ class _NavigationDemoState extends State<NavigationDemo>
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'Error: $e';
+        _statusMessage = 'Error starting navigation: $e';
       });
     } finally {
       setState(() {
@@ -436,6 +607,202 @@ class _NavigationDemoState extends State<NavigationDemo>
 
   Future<void> _recenterMap() async {
     await _navigationController?.recenterMap();
+  }
+
+  // Quick search dialog for when controls are hidden
+  Future<void> _showQuickSearchDialog() async {
+    final TextEditingController dialogController = TextEditingController(
+      text: _destinationAddress ?? '',
+    );
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Search Destination'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: dialogController,
+                decoration: const InputDecoration(
+                  hintText: 'Enter address or place name',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.search),
+                ),
+                autofocus: true,
+                onSubmitted: (value) {
+                  Navigator.of(context).pop();
+                  _addressController.text = value;
+                  _searchAddress(value);
+                },
+              ),
+              const SizedBox(height: 16),
+              if (_destinationAddress != null) ...[
+                Text('Current destination:'),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _destinationAddress!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            if (_destination != null)
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _startNavigation();
+                },
+                child: const Text('Navigate'),
+              ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _addressController.text = dialogController.text;
+                _searchAddress(dialogController.text);
+              },
+              child: const Text('Search'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Address search functionality
+  Future<void> _searchAddress(String address) async {
+    if (address.trim().isEmpty) {
+      setState(() {
+        _statusMessage = 'Please enter an address';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _statusMessage = 'Searching for address...';
+    });
+
+    try {
+      // Use geocoding to convert address to coordinates
+      List<Location> locations = await locationFromAddress(address);
+
+      if (locations.isNotEmpty) {
+        final location = locations.first;
+        final destinationPoint = LocationPoint.fromLatLng(
+          location.latitude,
+          location.longitude,
+        );
+
+        // Get the formatted address for display
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          location.latitude,
+          location.longitude,
+        );
+
+        String formattedAddress = address; // fallback to input
+        if (placemarks.isNotEmpty) {
+          final placemark = placemarks.first;
+          formattedAddress = _formatAddress(placemark);
+        }
+
+        setState(() {
+          _destination = destinationPoint;
+          _destinationAddress = formattedAddress;
+          _statusMessage = 'Destination found! Ready to navigate.';
+          _isSearching = false;
+        });
+
+        // Optionally center map on the destination
+        if (_mapController != null) {
+          await _mapController!.moveCamera(
+            center: destinationPoint,
+            zoom: 15.0,
+            animation: const CameraAnimation(
+              duration: Duration(milliseconds: 800),
+              type: AnimationType.easeInOut,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _statusMessage = 'No results found for "$address"';
+          _destination = null;
+          _destinationAddress = null;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      String errorMessage = 'Error searching for address';
+
+      // Provide more specific error messages
+      if (e.toString().contains('network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (e.toString().contains('not found')) {
+        errorMessage = 'Address not found. Please try a different search.';
+      } else {
+        errorMessage = 'Error searching for address: ${e.toString()}';
+      }
+
+      setState(() {
+        _statusMessage = errorMessage;
+        _destination = null;
+        _destinationAddress = null;
+        _isSearching = false;
+      });
+    }
+  }
+
+  // Helper method to format address from placemark
+  String _formatAddress(Placemark placemark) {
+    final parts = <String>[];
+
+    if (placemark.street?.isNotEmpty == true) {
+      parts.add(placemark.street!);
+    }
+
+    if (placemark.subLocality?.isNotEmpty == true) {
+      parts.add(placemark.subLocality!);
+    } else if (placemark.locality?.isNotEmpty == true) {
+      parts.add(placemark.locality!);
+    }
+
+    if (placemark.administrativeArea?.isNotEmpty == true) {
+      parts.add(placemark.administrativeArea!);
+    }
+
+    if (placemark.postalCode?.isNotEmpty == true) {
+      parts.add(placemark.postalCode!);
+    }
+
+    if (placemark.country?.isNotEmpty == true) {
+      parts.add(placemark.country!);
+    }
+
+    return parts.join(', ');
   }
 
   // NavigationEventListener implementation

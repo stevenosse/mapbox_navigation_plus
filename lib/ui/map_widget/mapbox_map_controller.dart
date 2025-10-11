@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
+import 'package:mapbox_navigation_plus/core/constants.dart';
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/route_model.dart';
 import '../../core/models/location_point.dart';
@@ -464,9 +465,7 @@ class MapboxMapController implements MapControllerInterface {
         for (final marker in markers) {
           if (marker.type == MarkerType.destination) {
             // Load custom image for this marker
-            final flagBytes = await rootBundle.load(
-              'packages/mapbox_navigation/assets/drapeau-darrivee.png',
-            );
+            final flagBytes = await rootBundle.load(kDefaultArrivalMarker);
 
             pointAnnotations.add(
               mb.PointAnnotationOptions(
@@ -735,7 +734,7 @@ class MapboxMapController implements MapControllerInterface {
       // Load idle image
       try {
         final imageData = await rootBundle.load(
-          config.idleImagePath ?? 'packages/mapbox_navigation/assets/car_marker.png',
+          config.idleImagePath ?? kDefaultLocationPuck,
         );
         customLocationPuckBytes = imageData.buffer.asUint8List();
       } catch (e) {
@@ -746,9 +745,7 @@ class MapboxMapController implements MapControllerInterface {
       // Load background image for idle state if accuracy circle is enabled
       if (config.showAccuracyCircle) {
         try {
-          final shadowData = await rootBundle.load(
-            'packages/mapbox_navigation/assets/car_marker_bg.png',
-          );
+          final shadowData = await rootBundle.load(kDefaultLocationPuckBackground);
           customLocationPuckBackgroundBytes = shadowData.buffer.asUint8List();
         } catch (e) {
           debugPrint('Failed to load idle location puck background: $e');
@@ -770,7 +767,7 @@ class MapboxMapController implements MapControllerInterface {
         enabled: true,
         locationPuck: locationPuck,
         pulsingEnabled: false,
-        puckBearing: mb.PuckBearing.COURSE,
+        puckBearing: mb.PuckBearing.HEADING,
         puckBearingEnabled: true,
       );
 
@@ -793,7 +790,7 @@ class MapboxMapController implements MapControllerInterface {
 
       try {
         final imageData = await rootBundle.load(
-          config.navigationImagePath ?? 'packages/mapbox_navigation/assets/navigation-location-puck.png',
+          config.navigationImagePath ?? kDefaultNavigationLocationPuck,
         );
         customLocationPuckBytes = imageData.buffer.asUint8List();
       } catch (e) {
@@ -815,7 +812,7 @@ class MapboxMapController implements MapControllerInterface {
         enabled: true,
         locationPuck: locationPuck,
         pulsingEnabled: false,
-        puckBearing: mb.PuckBearing.COURSE, 
+        puckBearing: mb.PuckBearing.COURSE,
         puckBearingEnabled: true,
       );
 
@@ -887,27 +884,33 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> showDestinationPin(LocationPoint location) async {
     try {
-      final config = _destinationPinConfig ?? DestinationPinConfig.defaultConfig;
-      
+      final config =
+          _destinationPinConfig ?? DestinationPinConfig.defaultConfig;
+
       // Create destination pin annotation
-      pointAnnotationManager ??= await _mapboxMap.annotations.createPointAnnotationManager();
+      pointAnnotationManager ??= await _mapboxMap.annotations
+          .createPointAnnotationManager();
 
       // Create the point annotation
       mb.PointAnnotationOptions annotation;
-      
+
       if (config.imagePath != null) {
         // Load custom image
         final imageData = await rootBundle.load(config.imagePath!);
         final imageBytes = imageData.buffer.asUint8List();
-        
+
         annotation = mb.PointAnnotationOptions(
-          geometry: mb.Point(coordinates: mb.Position(location.longitude, location.latitude)),
+          geometry: mb.Point(
+            coordinates: mb.Position(location.longitude, location.latitude),
+          ),
           image: imageBytes,
         );
       } else {
         // Use default pin without custom image
         annotation = mb.PointAnnotationOptions(
-          geometry: mb.Point(coordinates: mb.Position(location.longitude, location.latitude)),
+          geometry: mb.Point(
+            coordinates: mb.Position(location.longitude, location.latitude),
+          ),
         );
       }
 
@@ -928,5 +931,4 @@ class MapboxMapController implements MapControllerInterface {
       throw Exception('Failed to hide destination pin: $e');
     }
   }
-
 }
