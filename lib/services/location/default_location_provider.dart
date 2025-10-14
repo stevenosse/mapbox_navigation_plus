@@ -51,6 +51,7 @@ class DefaultLocationProvider implements LocationProvider {
 
       // Get initial position
       try {
+        await Future.delayed(const Duration(milliseconds: 500));
         final locationData = await _location.getLocation();
         _onLocationData(locationData);
       } catch (e) {

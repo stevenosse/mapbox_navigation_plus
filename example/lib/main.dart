@@ -67,13 +67,15 @@ class _NavigationDemoState extends State<NavigationDemo>
   // Route styling options
   RouteStyleConfig _currentRouteStyle = RouteStyleConfig.defaultConfig;
   int _selectedStyleIndex = 0;
-  
+
   // Location puck styling options
-  final LocationPuckConfig _currentLocationPuckStyle = LocationPuckThemes.defaultTheme;
-  
+  final LocationPuckConfig _currentLocationPuckStyle =
+      LocationPuckThemes.defaultTheme;
+
   // Destination pin styling options
-  final DestinationPinConfig _currentDestinationPinStyle = DestinationPinConfig.defaultConfig;
-  
+  final DestinationPinConfig _currentDestinationPinStyle =
+      DestinationPinConfig.defaultConfig;
+
   final List<RouteStyleConfig> _routeStyles = [
     RouteStyleConfig.defaultConfig,
     RouteStyleThemes.darkTheme,
@@ -102,7 +104,7 @@ class _NavigationDemoState extends State<NavigationDemo>
       ),
     ),
   ];
-  
+
   final List<String> _styleNames = [
     'Default',
     'Dark Theme',
@@ -116,9 +118,9 @@ class _NavigationDemoState extends State<NavigationDemo>
     _checkConfiguration();
     _statusMessage = 'Enter a destination address to begin';
 
-    // Set a default destination (San Francisco) for demo purposes
-    _destination = LocationPoint.fromLatLng(37.7849, -122.4094);
-    _destinationAddress = 'San Francisco, CA';
+    // Set a default destination for demo purposes
+    _destination = LocationPoint.fromLatLng(37.784947, -122.409444);
+    _destinationAddress = '142 Mason St, San Francisco, CA 94102, USA';
   }
 
   void _checkConfiguration() {
@@ -127,20 +129,6 @@ class _NavigationDemoState extends State<NavigationDemo>
         _statusMessage =
             '⚠️ Mapbox token not configured. Please edit variables.json';
       });
-    }
-  }
-
-  Future<void> _initCurrentLocation() async {
-    try {
-      final location = await _navigationController?.locationProvider
-          .getCurrentLocation();
-      if (location != null) {
-        setState(() {
-          _currentLocation = location;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error getting current location: $e');
     }
   }
 
@@ -181,9 +169,9 @@ class _NavigationDemoState extends State<NavigationDemo>
                 _destination, // Use current location or fallback to destination
             initialZoom: 17.0,
             routeProgress: _currentProgress,
-            onMapCreated: (controller) {
+            onMapCreated: (controller) async {
               _mapController = controller;
-              _initializeNavigation();
+              await _initializeNavigation();
             },
           ),
 
@@ -194,205 +182,218 @@ class _NavigationDemoState extends State<NavigationDemo>
               left: 16,
               right: 16,
               child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Status: ${_currentState.description}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _statusMessage,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Status: ${_currentState.description}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _statusMessage,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
 
-                    // Address search section
-                    const SizedBox(height: 16),
-                    Text(
-                      'Destination:',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _addressController,
-                            focusNode: _addressFocusNode,
-                            decoration: InputDecoration(
-                              hintText: 'Enter address or place name',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.search),
-                              suffixIcon: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_addressController.text.isNotEmpty)
-                                    IconButton(
-                                      icon: Icon(Icons.clear),
-                                      onPressed: () {
-                                        _addressController.clear();
-                                        setState(() {
-                                          _destination = null;
-                                          _destinationAddress = null;
-                                        });
+                      // Address search section
+                      const SizedBox(height: 16),
+                      Text(
+                        'Destination:',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _addressController,
+                              focusNode: _addressFocusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Enter address or place name',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.search),
+                                suffixIcon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_addressController.text.isNotEmpty)
+                                      IconButton(
+                                        icon: Icon(Icons.clear),
+                                        onPressed: () {
+                                          _addressController.clear();
+                                          setState(() {
+                                            _destination = null;
+                                            _destinationAddress = null;
+                                          });
+                                        },
+                                      ),
+                                    PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert),
+                                      onSelected: (value) {
+                                        if (value == 'san_francisco') {
+                                          _addressController.text =
+                                              'San Francisco, CA';
+                                          _searchAddress('San Francisco, CA');
+                                        } else if (value == 'new_york') {
+                                          _addressController.text =
+                                              'New York, NY';
+                                          _searchAddress('New York, NY');
+                                        } else if (value == 'los_angeles') {
+                                          _addressController.text =
+                                              'Los Angeles, CA';
+                                          _searchAddress('Los Angeles, CA');
+                                        }
                                       },
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'san_francisco',
+                                          child: Text('San Francisco, CA'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'new_york',
+                                          child: Text('New York, NY'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'los_angeles',
+                                          child: Text('Los Angeles, CA'),
+                                        ),
+                                      ],
                                     ),
-                                  PopupMenuButton<String>(
-                                    icon: Icon(Icons.more_vert),
-                                    onSelected: (value) {
-                                      if (value == 'san_francisco') {
-                                        _addressController.text = 'San Francisco, CA';
-                                        _searchAddress('San Francisco, CA');
-                                      } else if (value == 'new_york') {
-                                        _addressController.text = 'New York, NY';
-                                        _searchAddress('New York, NY');
-                                      } else if (value == 'los_angeles') {
-                                        _addressController.text = 'Los Angeles, CA';
-                                        _searchAddress('Los Angeles, CA');
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      PopupMenuItem(
-                                        value: 'san_francisco',
-                                        child: Text('San Francisco, CA'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'new_york',
-                                        child: Text('New York, NY'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'los_angeles',
-                                        child: Text('Los Angeles, CA'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
+                              onSubmitted: (value) => _searchAddress(value),
                             ),
-                            onSubmitted: (value) => _searchAddress(value),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _isSearching
-                              ? null
-                              : () => _searchAddress(_addressController.text),
-                          child: _isSearching
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Text('Search'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _isSearching
+                                ? null
+                                : () => _searchAddress(_addressController.text),
+                            child: _isSearching
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text('Search'),
+                          ),
+                        ],
+                      ),
 
-                    if (_destinationAddress != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _destinationAddress!,
-                                style: Theme.of(context).textTheme.bodySmall,
+                      if (_destinationAddress != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on,
+                                size: 16,
+                                color: Colors.grey[600],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (_currentProgress != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Remaining: ${_currentProgress!.formattedDistanceRemaining}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      Text(
-                        'ETA: ${_currentProgress!.formattedETA}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    
-                    // Route Style Selection
-                    Text(
-                      'Route Style:',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButton<int>(
-                      value: _selectedStyleIndex,
-                      isExpanded: true,
-                      items: _styleNames.asMap().entries.map((entry) {
-                        return DropdownMenuItem<int>(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        );
-                      }).toList(),
-                      onChanged: (int? newIndex) {
-                        if (newIndex != null) {
-                          setState(() {
-                            _selectedStyleIndex = newIndex;
-                            _currentRouteStyle = _routeStyles[newIndex];
-                          });
-                          // Update the navigation controller with new style
-                          _navigationController?.updateRouteStyleConfig(_currentRouteStyle);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    Row(
-                      children: [
-                        if (!_isLoading && _currentState.canStart)
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _destination != null ? _startNavigation : null,
-                              child: const Text('Start Navigation'),
-                            ),
-                          ),
-                        if (_currentState.canPause)
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _pauseNavigation,
-                              child: const Text('Pause'),
-                            ),
-                          ),
-                        if (_currentState.canResume)
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _resumeNavigation,
-                              child: const Text('Resume'),
-                            ),
-                          ),
-                        if (_currentState.canStop)
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _stopNavigation,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _destinationAddress!,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                               ),
-                              child: const Text('Stop'),
-                            ),
+                            ],
                           ),
+                        ),
                       ],
-                    ),
-                  ],
-                ),
+                      if (_currentProgress != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Remaining: ${_currentProgress!.formattedDistanceRemaining}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        Text(
+                          'ETA: ${_currentProgress!.formattedETA}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+
+                      // Route Style Selection
+                      Text(
+                        'Route Style:',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButton<int>(
+                        value: _selectedStyleIndex,
+                        isExpanded: true,
+                        items: _styleNames.asMap().entries.map((entry) {
+                          return DropdownMenuItem<int>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          );
+                        }).toList(),
+                        onChanged: (int? newIndex) {
+                          if (newIndex != null) {
+                            setState(() {
+                              _selectedStyleIndex = newIndex;
+                              _currentRouteStyle = _routeStyles[newIndex];
+                            });
+                            // Update the navigation controller with new style
+                            _navigationController?.updateRouteStyleConfig(
+                              _currentRouteStyle,
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          if (!_isLoading && _currentState.canStart)
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _destination != null
+                                    ? _startNavigation
+                                    : null,
+                                child: const Text('Start Navigation'),
+                              ),
+                            ),
+                          if (_currentState.canPause)
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _pauseNavigation,
+                                child: const Text('Pause'),
+                              ),
+                            ),
+                          if (_currentState.canResume)
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _resumeNavigation,
+                                child: const Text('Resume'),
+                              ),
+                            ),
+                          if (_currentState.canStop)
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _stopNavigation,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Stop'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -514,8 +515,6 @@ class _NavigationDemoState extends State<NavigationDemo>
 
     // Get current location for navigation
     try {
-      await _initCurrentLocation();
-
       await _navigationController!.initializeLocation();
 
       locationProvider.locationStream.listen((location) {
@@ -554,7 +553,8 @@ class _NavigationDemoState extends State<NavigationDemo>
 
     setState(() {
       _isLoading = true;
-      _statusMessage = 'Calculating route to ${_destinationAddress ?? 'destination'}...';
+      _statusMessage =
+          'Calculating route to ${_destinationAddress ?? 'destination'}...';
     });
 
     try {
@@ -565,7 +565,8 @@ class _NavigationDemoState extends State<NavigationDemo>
 
       if (result.success) {
         setState(() {
-          _statusMessage = 'Navigation started! Following route to ${_destinationAddress ?? 'destination'}...';
+          _statusMessage =
+              'Navigation started! Following route to ${_destinationAddress ?? 'destination'}...';
         });
       } else {
         setState(() {

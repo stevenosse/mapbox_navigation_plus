@@ -46,7 +46,8 @@ class NavigationController implements NavController {
 
   // Location puck and destination pin configurations
   LocationPuckConfig _locationPuckConfig = LocationPuckThemes.defaultTheme;
-  DestinationPinConfig _destinationPinConfig = DestinationPinConfig.defaultConfig;
+  DestinationPinConfig _destinationPinConfig =
+      DestinationPinConfig.defaultConfig;
 
   // State management
   NavigationState _currentState = NavigationState.idle;
@@ -85,8 +86,10 @@ class NavigationController implements NavController {
     LocationPuckConfig? locationPuckConfig,
     DestinationPinConfig? destinationPinConfig,
   }) : _routeStyleConfig = routeStyleConfig ?? RouteStyleConfig.defaultConfig,
-       _locationPuckConfig = locationPuckConfig ?? LocationPuckThemes.defaultTheme,
-       _destinationPinConfig = destinationPinConfig ?? DestinationPinConfig.defaultConfig {
+       _locationPuckConfig =
+           locationPuckConfig ?? LocationPuckThemes.defaultTheme,
+       _destinationPinConfig =
+           destinationPinConfig ?? DestinationPinConfig.defaultConfig {
     // Initialize camera controller (includes road transition effects)
     _cameraController = CameraController(mapController);
   }
@@ -494,7 +497,7 @@ class NavigationController implements NavController {
         location: location,
         routeProgress: _currentProgress,
       );
-      
+
       // Update road transition effects
       if (_currentProgress != null) {
         // Road transition effects are now handled directly by the Waze camera controller
