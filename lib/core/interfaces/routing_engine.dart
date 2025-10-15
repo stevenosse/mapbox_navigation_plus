@@ -2,6 +2,7 @@ import 'dart:async';
 import '../models/route_model.dart';
 import '../models/location_point.dart';
 import '../models/routing_options.dart';
+import '../models/route_result.dart';
 
 /// Abstract interface for route calculation and re-routing
 abstract class RoutingEngine {
@@ -36,4 +37,14 @@ abstract class RoutingEngine {
 
   /// Cancel ongoing route calculation
   void cancelRouteCalculation();
+
+  /// Gets multiple routes with different optimization types
+  /// This allows users to compare different route options like fastest, shortest, eco-friendly, etc.
+  Future<List<RouteResult>> getMultipleRoutes({
+    required LocationPoint origin,
+    required LocationPoint destination,
+    required List<RouteType> routeTypes,
+    List<LocationPoint>? waypoints,
+    RoutingOptions? baseOptions,
+  });
 }

@@ -5,6 +5,7 @@ import '../../core/interfaces/routing_engine.dart';
 import '../../core/models/route_model.dart';
 import '../../core/models/location_point.dart';
 import '../../core/models/routing_options.dart';
+import '../../core/models/route_result.dart';
 
 /// Mapbox Directions API implementation of RoutingEngine
 class MapboxRoutingEngine implements RoutingEngine {
@@ -147,6 +148,118 @@ class MapboxRoutingEngine implements RoutingEngine {
     // Note: HTTP requests in Dart don't have built-in cancellation support
     // In a real implementation, you might want to use a more advanced HTTP client
     // or manage request tokens for cancellation
+  }
+
+  @override
+  Future<List<RouteResult>> getMultipleRoutes({
+    required LocationPoint origin,
+    required LocationPoint destination,
+    required List<RouteType> routeTypes,
+    List<LocationPoint>? waypoints,
+    RoutingOptions? baseOptions,
+  }) async {
+    if (routeTypes.isEmpty) {
+      throw ArgumentError('At least one route type must be specified');
+    }
+
+    final results = <RouteResult>[];
+    final baseOpts = baseOptions ?? const RoutingOptions();
+
+    // Process each route type concurrently for better performance
+    final futures = routeTypes.map((routeType) async {
+      try {
+        // Create specific options for this route type
+        final routeOptions = _createOptionsForRouteType(routeType, baseOpts);
+        
+        // Get the route using the specific options
+        final route = await getRoute(
+          origin: origin,
+          destination: destination,
+          waypoints: waypoints,
+          options: routeOptions,
+        );
+
+        return RouteResult.fromRoute(
+          route: route,
+          routeType: routeType,
+          additionalData: {
+            'profile': routeOptions.profile.value,
+            'avoid_types': routeType.avoidTypes.map((e) => e.value).toList(),
+          },
+        );
+      } catch (e) {
+        return null;
+      }
+    });
+
+    final routeResults = await Future.wait(futures);
+    
+    // Filter out null results (failed calculations)
+    for (final result in routeResults) {
+      if (result != null) {
+        results.add(result);
+      }
+    }
+
+    if (results.isEmpty) {
+      throw RoutingError._(
+        type: RoutingErrorType.unknown,
+        message: 'Failed to calculate any routes for the specified types',
+      );
+    }
+
+    // Sort results by duration (fastest first) for better UX
+    results.sort((a, b) => a.route.duration.compareTo(b.route.duration));
+
+    return results;
+  }
+
+  /// Creates routing options specific to a route type
+  RoutingOptions _createOptionsForRouteType(RouteType routeType, RoutingOptions baseOptions) {
+    return baseOptions.copyWith(
+      profile: routeType.mapboxProfile,
+      avoid: routeType.avoidTypes,
+      alternatives: false, // We handle alternatives through multiple requests
+      additionalParams: _getAdditionalParamsForRouteType(routeType, baseOptions.additionalParams),
+    );
+  }
+
+  /// Gets additional API parameters specific to each route type
+  Map<String, String> _getAdditionalParamsForRouteType(RouteType routeType, Map<String, String> baseParams) {
+    final params = Map<String, String>.from(baseParams);
+    
+    switch (routeType) {
+      case RouteType.timeOptimized:
+        // Use traffic-aware routing with fastest optimization
+        params['annotations'] = 'duration,distance,speed';
+        break;
+      case RouteType.distanceOptimized:
+        // Optimize for shortest distance
+        params['annotations'] = 'distance,duration';
+        break;
+      case RouteType.noTraffic:
+        // Explicitly disable traffic considerations
+        params['annotations'] = 'duration,distance';
+        break;
+      case RouteType.ecoFriendly:
+        // Optimize for fuel efficiency (use annotations that help with eco routing)
+        params['annotations'] = 'duration,distance,speed';
+        break;
+      case RouteType.tollFree:
+        // Avoid tolls (handled by avoid parameter)
+        params['annotations'] = 'duration,distance';
+        break;
+      case RouteType.scenicRoute:
+        // Avoid highways (handled by avoid parameter)
+        params['annotations'] = 'duration,distance';
+        break;
+      case RouteType.balanced:
+        // Balanced approach with traffic awareness
+        params['annotations'] = 'duration,distance,speed';
+        break;
+    }
+    
+    return params;
   }
 
   /// Builds the Mapbox Directions API URL
