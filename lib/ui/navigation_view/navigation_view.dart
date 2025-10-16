@@ -16,7 +16,8 @@ class NavigationView extends StatefulWidget {
   final bool enableLocation;
   final RouteProgress? routeProgress;
   final void Function(MapboxMapController)? onMapCreated;
-  
+  final VoidCallback? onFollowingLocationStopped;
+
   // Route selection parameters
   final List<RouteResult>? availableRoutes;
   final bool showRouteSelection;
@@ -37,6 +38,7 @@ class NavigationView extends StatefulWidget {
     this.showRouteSelection = false,
     this.onRouteSelected,
     this.onRouteSelectionCancelled,
+    this.onFollowingLocationStopped,
   });
 
   @override
@@ -72,10 +74,20 @@ class _NavigationViewState extends State<NavigationView> {
             await _setupLocationPuck();
             await _setupCustomMarkers();
           },
+          onScrollListener: (scrollEvent) {
+            _mapController?.setFollowingLocation(false);
+            widget.onFollowingLocationStopped?.call();
+          },
+          onZoomListener: (zoomChanged) {
+            _mapController?.setFollowingLocation(false);
+            widget.onFollowingLocationStopped?.call();
+          },
         ),
-        
+
         // Route selection overlay
-        if (widget.showRouteSelection && widget.availableRoutes != null && widget.onRouteSelected != null)
+        if (widget.showRouteSelection &&
+            widget.availableRoutes != null &&
+            widget.onRouteSelected != null)
           Positioned(
             bottom: 0,
             left: 0,

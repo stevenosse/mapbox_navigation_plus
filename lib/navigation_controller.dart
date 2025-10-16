@@ -228,6 +228,7 @@ class NavigationController implements NavController {
     RoutingOptions? options,
   }) async {
     try {
+      mapController.setFollowingLocation(true);
       _updateState(NavigationState.routing);
 
       // Calculate route
@@ -450,6 +451,19 @@ class NavigationController implements NavController {
   }
 
   @override
+  Future<void> resumeFollowing() async {
+    mapController.setFollowingLocation(true);
+
+    final currentLocation = locationProvider.currentLocation;
+    if (currentLocation != null) {
+      await mapController.centerOnLocation(
+        location: currentLocation,
+        followLocation: true,
+      );
+    }
+  }
+
+  @override
   Future<void> reroute() async {
     if (_currentRoute == null || _currentProgress == null) return;
 
@@ -529,20 +543,22 @@ class NavigationController implements NavController {
   void _onLocationUpdate(LocationPoint location) {
     mapController.updateLocationPuck(location);
 
-    if (_currentState == NavigationState.navigating) {
-      _cameraController.updateCamera(
-        location: location,
-        routeProgress: _currentProgress,
-      );
-    } else {
-      mapController.moveCamera(
-        center: location,
-        zoom: 17.0,
-        animation: const CameraAnimation(
-          duration: Duration(milliseconds: 400),
-          type: AnimationType.easeInOut,
-        ),
-      );
+    if (mapController.isFollowingLocation) {
+      if (_currentState == NavigationState.navigating) {
+        _cameraController.updateCamera(
+          location: location,
+          routeProgress: _currentProgress,
+        );
+      } else {
+        mapController.moveCamera(
+          center: location,
+          zoom: 17.0,
+          animation: const CameraAnimation(
+            duration: Duration(milliseconds: 400),
+            type: AnimationType.easeInOut,
+          ),
+        );
+      }
     }
   }
 

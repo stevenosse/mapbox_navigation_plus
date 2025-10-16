@@ -43,7 +43,7 @@ class MapboxMapController implements MapControllerInterface {
   static const String _destinationPinSourceId = 'destination_pin_source';
   static const String _destinationPinLayerId = 'destination_pin_layer';
 
-  bool _isFollowingLocation = false;
+  bool _isFollowingLocation = true;
   LocationPoint? _currentLocation;
   LocationPoint? _lastLocation;
 
@@ -557,6 +557,8 @@ class MapboxMapController implements MapControllerInterface {
     double? heading,
     CameraAnimation? animation,
   }) async {
+    if (!_isFollowingLocation) return;
+
     try {
       final cameraOptions = mb.CameraOptions(
         center: mb.Point(
@@ -945,6 +947,7 @@ class MapboxMapController implements MapControllerInterface {
     required List<RouteResult> routes,
     RouteStyleConfig? baseStyleConfig,
     bool highlightFastest = true,
+    String? primaryRouteId,
   }) async {
     try {
       final Map<String, String> routeIds = {};
@@ -1136,5 +1139,10 @@ class MapboxMapController implements MapControllerInterface {
     } catch (e) {
       throw Exception('Failed to highlight route: $e');
     }
+  }
+
+  @override
+  void setFollowingLocation(bool follow) {
+    _isFollowingLocation = follow;
   }
 }

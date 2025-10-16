@@ -75,6 +75,9 @@ abstract class NavController {
   /// Re-centers map on current location
   Future<void> recenterMap();
 
+  /// Resumes smooth camera following after user interaction
+  Future<void> resumeFollowing();
+
   /// Triggers manual re-routing
   Future<void> reroute();
 

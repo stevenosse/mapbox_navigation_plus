@@ -90,6 +90,14 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
               ),
             ),
           ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: () => _navigationController?.resumeFollowing(),
+              child: Icon(Icons.gps_fixed),
+            ),
+          ),
 
           // Loading overlay
           if (_isLoadingRoutes)
@@ -158,8 +166,10 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
       );
 
       if (routes.isNotEmpty) {
-        // Draw all routes on the map
-        await _mapController?.drawMultipleRoutes(routes: routes);
+        await _mapController?.drawMultipleRoutes(
+          routes: routes,
+          highlightFastest: true,
+        );
 
         setState(() {
           _availableRoutes = routes;

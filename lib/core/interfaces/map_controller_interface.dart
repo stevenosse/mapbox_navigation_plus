@@ -16,13 +16,12 @@ abstract class MapControllerInterface {
     RouteStyleConfig? styleConfig,
   });
 
-  /// Draws multiple routes on the map for route selection
-  /// Each route will be styled differently to distinguish them
-  /// Returns a map of route IDs to their visual representations
+  /// Draws multiple routes on the map with different styling
   Future<Map<String, String>> drawMultipleRoutes({
     required List<RouteResult> routes,
     RouteStyleConfig? baseStyleConfig,
     bool highlightFastest = true,
+    String? primaryRouteId,
   });
 
   /// Clears multiple routes from the map
@@ -80,6 +79,9 @@ abstract class MapControllerInterface {
 
   /// Whether the map is currently following user location
   bool get isFollowingLocation;
+
+  /// Sets the location following state (for gesture detection)
+  void setFollowingLocation(bool follow);
 
   /// Updates the custom location puck position and heading
   Future<void> updateLocationPuck(LocationPoint location);

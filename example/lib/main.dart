@@ -1,4 +1,3 @@
-import 'package:example/multiple_routes_example.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
 import 'package:geocoding/geocoding.dart';
@@ -26,9 +25,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mapbox Navigation Demo',
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: MultipleRoutesExample(
-        mapboxAccessToken: Config.instance.mapboxAccessToken,
-      ),
+      home: NavigationDemo(),
     );
   }
 }
@@ -175,6 +172,9 @@ class _NavigationDemoState extends State<NavigationDemo>
             onMapCreated: (controller) async {
               _mapController = controller;
               await _initializeNavigation();
+            },
+            onFollowingLocationStopped: () {
+              setState(() {});
             },
           ),
 
@@ -437,7 +437,7 @@ class _NavigationDemoState extends State<NavigationDemo>
             ),
 
           // Re-center button
-          if (_currentState.isActive)
+          if (_navigationController?.mapController.isFollowingLocation != true)
             Positioned(
               bottom: 100,
               right: 16,
