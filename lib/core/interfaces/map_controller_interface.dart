@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import '../models/route_model.dart';
 import '../models/location_point.dart';
 import '../models/route_progress.dart';
@@ -13,6 +14,13 @@ abstract class MapControllerInterface {
   Future<void> drawRoute({
     required RouteModel route,
     RouteStyleConfig? styleConfig,
+  });
+
+  /// Draws multiple routes on the map with different colors
+  Future<void> drawMultipleRoutes({
+    required List<RouteModel> routes,
+    List<Color>? colors,
+    RouteStyleConfig? baseStyleConfig,
   });
 
   /// Clears multiple routes from the map

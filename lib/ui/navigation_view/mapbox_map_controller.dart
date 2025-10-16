@@ -954,6 +954,125 @@ class MapboxMapController implements MapControllerInterface {
     }
   }
 
+  /// Draws multiple routes on the map with different colors
+  Future<void> drawMultipleRoutes({
+    required List<RouteModel> routes,
+    List<Color>? colors,
+    RouteStyleConfig? baseStyleConfig,
+  }) async {
+    try {
+      if (routes.isEmpty) return;
+
+      // Clear existing multiple routes first
+      await clearMultipleRoutes();
+
+      // Use provided colors or generate default ones
+      final routeColors = colors ?? [
+        const Color(0xFF3366CC), // Blue
+        const Color(0xFF00AA00), // Green
+        const Color(0xFFFF6600), // Orange
+        const Color(0xFFCC00CC), // Purple
+        const Color(0xFF00CCCC), // Cyan
+      ];
+
+      final baseConfig = baseStyleConfig ?? RouteStyleConfig.defaultConfig;
+
+      // Create each route with its own layer and source
+      for (int i = 0; i < routes.length; i++) {
+        final route = routes[i];
+        final routeId = route.id;
+        final color = routeColors[i % routeColors.length];
+
+        // Create unique source and layer IDs for this route
+        final sourceId = '${_routeSourceId}_multiple_$routeId';
+        final layerId = '${_routeLayerId}_multiple_$routeId';
+
+        // Convert route geometry to coordinates
+        final coordinates = route.geometry
+            .map((point) => '[${point.longitude},${point.latitude}]')
+            .join(',');
+
+        // Create GeoJSON string for the route
+        final routeGeoJson =
+            '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coordinates]},"properties":{"routeId":"$routeId"}}';
+
+        // Add source for this route
+        await _mapboxMap.style.addSource(
+          mb.GeoJsonSource(
+            id: sourceId,
+            data: routeGeoJson,
+          ),
+        );
+
+        // Create and add layer for this route
+        final routeLayer = mb.LineLayer(
+          id: layerId,
+          sourceId: sourceId,
+        );
+
+        try {
+          await _mapboxMap.style.addLayerAt(
+            routeLayer,
+            mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
+          );
+        } catch (e) {
+          // Fallback: add layer normally
+          await _mapboxMap.style.addLayer(routeLayer);
+        }
+
+        // Set route layer properties with custom color
+        await _mapboxMap.style.setStyleLayerProperty(
+          layerId,
+          'line-color',
+          '#${(color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+        );
+        await _mapboxMap.style.setStyleLayerProperty(
+          layerId,
+          'line-width',
+          baseConfig.routeLineStyle.width,
+        );
+        await _mapboxMap.style.setStyleLayerProperty(
+          layerId,
+          'line-opacity',
+          i == 0 ? 1.0 : 0.8, // First route (usually fastest) is more prominent
+        );
+        await _mapboxMap.style.setStyleLayerProperty(
+          layerId,
+          'line-cap',
+          baseConfig.routeLineStyle.capStyle.value,
+        );
+        await _mapboxMap.style.setStyleLayerProperty(
+          layerId,
+          'line-join',
+          baseConfig.routeLineStyle.joinStyle.value,
+        );
+
+        // Track this route for highlighting
+        _multipleRouteIds[routeId] = layerId;
+      }
+
+      // Add markers for origin and destination (only once)
+      if (routes.isNotEmpty) {
+        final firstRoute = routes.first;
+        final markers = <MapMarker>[
+          MapMarker.origin(position: firstRoute.origin),
+          MapMarker.destination(position: firstRoute.destination),
+        ];
+
+        // Add waypoint markers if any
+        for (int i = 0; i < firstRoute.waypoints.length; i++) {
+          markers.add(
+            MapMarker.waypoint(position: firstRoute.waypoints[i], index: i + 1),
+          );
+        }
+
+        await addMarkers(markers);
+      }
+    } catch (e) {
+      throw Exception('Failed to draw multiple routes: $e');
+    }
+  }
+
   /// Highlights a specific route from multiple routes
   @override
   Future<void> highlightRoute(String routeId) async {
