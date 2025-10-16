@@ -4,8 +4,6 @@ import 'mapbox_map_controller.dart';
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/location_point.dart';
 import '../../core/models/route_progress.dart';
-import '../../core/models/route_result.dart';
-import '../widgets/route_selection_widget.dart';
 
 class NavigationView extends StatefulWidget {
   final MapControllerInterface? controller;
@@ -18,12 +16,6 @@ class NavigationView extends StatefulWidget {
   final void Function(MapboxMapController)? onMapCreated;
   final VoidCallback? onFollowingLocationStopped;
 
-  // Route selection parameters
-  final List<RouteResult>? availableRoutes;
-  final bool showRouteSelection;
-  final Function(RouteResult)? onRouteSelected;
-  final VoidCallback? onRouteSelectionCancelled;
-
   const NavigationView({
     super.key,
     this.controller,
@@ -34,10 +26,6 @@ class NavigationView extends StatefulWidget {
     this.enableLocation = true,
     this.routeProgress,
     this.onMapCreated,
-    this.availableRoutes,
-    this.showRouteSelection = false,
-    this.onRouteSelected,
-    this.onRouteSelectionCancelled,
     this.onFollowingLocationStopped,
   });
 
@@ -88,21 +76,6 @@ class _NavigationViewState extends State<NavigationView> {
             widget.onFollowingLocationStopped?.call();
           },
         ),
-
-        // Route selection overlay
-        if (widget.showRouteSelection &&
-            widget.availableRoutes != null &&
-            widget.onRouteSelected != null)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: RouteSelectionWidget(
-              routes: widget.availableRoutes!,
-              onRouteSelected: widget.onRouteSelected!,
-              onCancel: widget.onRouteSelectionCancelled,
-            ),
-          ),
       ],
     );
   }

@@ -15,7 +15,6 @@ import '../../core/models/map_marker.dart';
 import '../../core/models/route_style_config.dart';
 import '../../core/models/location_puck_config.dart';
 import '../../core/models/destination_pin_config.dart';
-import '../../core/models/route_result.dart';
 
 /// Mapbox Maps implementation of MapControllerInterface
 class MapboxMapController implements MapControllerInterface {
@@ -921,111 +920,6 @@ class MapboxMapController implements MapControllerInterface {
   // Multiple routes management
   final Map<String, String> _multipleRouteIds = {};
   String? _highlightedRouteId;
-
-  /// Draws multiple routes on the map with different styling
-  @override
-  Future<Map<String, String>> drawMultipleRoutes({
-    required List<RouteResult> routes,
-    RouteStyleConfig? baseStyleConfig,
-    bool highlightFastest = true,
-    String? primaryRouteId,
-  }) async {
-    try {
-      final Map<String, String> routeIds = {};
-
-      // Clear existing multiple routes first
-      await clearMultipleRoutes();
-
-      for (int i = 0; i < routes.length; i++) {
-        final routeResult = routes[i];
-        final route = routeResult.route;
-        final routeId = 'route_${routeResult.routeType.name}_$i';
-
-        // Create unique source and layer IDs for each route
-        final sourceId = '${_routeSourceId}_multiple_$routeId';
-        final layerId = '${_routeLayerId}_multiple_$routeId';
-
-        // Create GeoJSON for the route
-        final coordinates = route.geometry
-            .map((point) => '[${point.longitude},${point.latitude}]')
-            .join(',');
-        final geoJson =
-            '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coordinates]},"properties":{}}';
-
-        // Add source for this route
-        await _mapboxMap.style.addSource(
-          mb.GeoJsonSource(id: sourceId, data: geoJson),
-        );
-
-        // Determine styling based on route type and whether it should be highlighted
-        final bool isFastest =
-            highlightFastest && i == 0; // Assume first route is fastest
-        final config = baseStyleConfig ?? RouteStyleConfig.defaultConfig;
-
-        // Create layer for this route with appropriate styling
-        final lineLayer = mb.LineLayer(id: layerId, sourceId: sourceId);
-
-        // Add the layer to the map first
-        await _mapboxMap.style.addLayer(lineLayer);
-
-        // Apply styling based on whether this is the highlighted route
-        if (isFastest) {
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-color',
-            config.routeLineStyle.colorHex,
-          );
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-width',
-            config.routeLineStyle.width + 2.0,
-          );
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-opacity',
-            1.0,
-          );
-          _highlightedRouteId = routeId;
-        } else {
-          // Use a more subdued color for non-highlighted routes
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-color',
-            '#888888',
-          );
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-width',
-            config.routeLineStyle.width,
-          );
-          await _mapboxMap.style.setStyleLayerProperty(
-            layerId,
-            'line-opacity',
-            0.7,
-          );
-        }
-
-        await _mapboxMap.style.setStyleLayerProperty(
-          layerId,
-          'line-cap',
-          'round',
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          layerId,
-          'line-join',
-          'round',
-        );
-
-        // Store the route ID mapping
-        routeIds[routeId] = layerId;
-        _multipleRouteIds[routeId] = layerId;
-      }
-
-      return routeIds;
-    } catch (e) {
-      throw Exception('Failed to draw multiple routes: $e');
-    }
-  }
 
   /// Clears all multiple routes from the map
   @override

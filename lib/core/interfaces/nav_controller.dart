@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:mapbox_navigation_plus/core/models/location_point.dart';
 import 'package:mapbox_navigation_plus/core/models/route_model.dart';
-import 'package:mapbox_navigation_plus/core/models/route_result.dart';
 import 'package:mapbox_navigation_plus/core/models/route_progress.dart';
 import 'package:mapbox_navigation_plus/core/models/maneuver.dart';
 import 'package:mapbox_navigation_plus/core/models/navigation_state.dart';
@@ -50,17 +49,6 @@ abstract class NavController {
   /// Starts navigation with a pre-calculated route
   Future<NavigationResult> startNavigationWithRoute({
     required RouteModel route,
-  });
-
-  /// Requests multiple routes with different optimization criteria
-  /// Returns a list of RouteResult objects that can be displayed on the map
-  /// for user selection before starting navigation
-  Future<List<RouteResult>> requestMultipleRoutes({
-    required LocationPoint origin,
-    required LocationPoint destination,
-    required List<RouteType> routeTypes,
-    List<LocationPoint>? waypoints,
-    RoutingOptions? baseOptions,
   });
 
   /// Stops navigation

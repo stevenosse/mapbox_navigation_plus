@@ -8,7 +8,6 @@ import 'core/interfaces/voice_guidance.dart';
 import 'core/interfaces/map_controller_interface.dart';
 import 'core/models/location_point.dart';
 import 'core/models/route_model.dart';
-import 'core/models/route_result.dart';
 import 'core/models/route_progress.dart';
 import 'core/models/maneuver.dart';
 import 'core/models/navigation_state.dart';
@@ -309,43 +308,6 @@ class NavigationController implements NavController {
       _errorController.add(error);
 
       return NavigationResult.failure(error);
-    }
-  }
-
-  @override
-  Future<List<RouteResult>> requestMultipleRoutes({
-    required LocationPoint origin,
-    required LocationPoint destination,
-    required List<RouteType> routeTypes,
-    List<LocationPoint>? waypoints,
-    RoutingOptions? baseOptions,
-  }) async {
-    try {
-      final previousNavigationState = _currentState;
-      _updateState(NavigationState.routing);
-
-      // Use the routing engine's getMultipleRoutes method
-      final routeResults = await routingEngine.getMultipleRoutes(
-        origin: origin,
-        destination: destination,
-        routeTypes: routeTypes,
-        waypoints: waypoints,
-        baseOptions: baseOptions,
-      );
-
-      _updateState(previousNavigationState);
-      return routeResults;
-    } catch (e) {
-      final error = NavigationError(
-        type: NavigationErrorType.routingFailed,
-        message: 'Failed to calculate multiple routes: $e',
-        originalError: e,
-      );
-
-      _updateState(NavigationState.error);
-      _errorController.add(error);
-
-      return [];
     }
   }
 
