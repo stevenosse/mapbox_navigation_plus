@@ -557,8 +557,6 @@ class MapboxMapController implements MapControllerInterface {
     double? heading,
     CameraAnimation? animation,
   }) async {
-    if (!_isFollowingLocation) return;
-
     try {
       final cameraOptions = mb.CameraOptions(
         center: mb.Point(
@@ -678,9 +676,6 @@ class MapboxMapController implements MapControllerInterface {
   @override
   bool get isFollowingLocation => _isFollowingLocation;
 
-  // Event handlers can be added to the MapWidget for user interaction
-
-  /// Get indices of geometry points that represent the traveled portion
   List<int> _getTraveledGeometryIndices(
     List<LocationPoint> geometry,
     double distanceTraveled,
@@ -779,7 +774,6 @@ class MapboxMapController implements MapControllerInterface {
       final mapboxMap = _mapboxMap;
       final config = _locationPuckConfig ?? LocationPuckThemes.defaultTheme;
 
-      // Load the navigation location puck image
       Uint8List? customLocationPuckBytes;
 
       try {
@@ -792,11 +786,9 @@ class MapboxMapController implements MapControllerInterface {
         return;
       }
 
-      // Create navigation location puck without background
       final locationPuck = mb.LocationPuck(
         locationPuck2D: mb.LocationPuck2D(
           bearingImage: customLocationPuckBytes,
-          shadowImage: null, // No background for navigation state
           opacity: config.opacity,
         ),
       );

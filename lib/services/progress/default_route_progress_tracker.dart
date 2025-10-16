@@ -47,7 +47,6 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _hasArrived = false;
     _lastManeuverNotificationTime = null;
 
-    // Start listening to location updates
     _locationSubscription = locationStream.listen(
       _onLocationUpdate,
       onError: (error) {
@@ -55,8 +54,7 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
       },
     );
 
-    // Start periodic progress updates (every 2 seconds, only if significant changes)
-    _progressTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _progressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (_currentProgress != null && _shouldEmitProgress()) {
         _lastEmittedProgress = _currentProgress;
         _progressController.add(_currentProgress!);
@@ -120,20 +118,16 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   void _onLocationUpdate(LocationPoint location) {
     if (!_isTracking || _currentRoute == null || _startTime == null) return;
 
-    // Calculate route progress
     _currentProgress = RouteProgress.fromLocationAndRoute(
       currentLocation: location,
       route: _currentRoute!,
       startTime: _startTime!,
     );
 
-    // Check for route deviation
     _checkRouteDeviation(location);
 
-    // Check for upcoming maneuvers
     _checkUpcomingManeuvers();
 
-    // Check for arrival
     _checkArrival();
 
     if (_lastLocation == null ||

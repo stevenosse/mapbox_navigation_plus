@@ -44,12 +44,9 @@ class DefaultLocationProvider implements LocationProvider {
       // Start location updates
       _locationSubscription = _location.onLocationChanged.listen(
         _onLocationData,
-        onError: (error) {
-          _locationController.addError(error);
-        },
+        onError: (error) => _locationController.addError(error),
       );
 
-      // Get initial position
       try {
         await Future.delayed(const Duration(milliseconds: 500));
         final locationData = await _location.getLocation();

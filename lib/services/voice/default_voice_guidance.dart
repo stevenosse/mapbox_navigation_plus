@@ -12,7 +12,7 @@ class DefaultVoiceGuidance implements VoiceGuidance {
   VoiceState _currentState = VoiceState.idle;
   bool _isEnabled = true;
   double _volume = 1.0;
-  double _speechRate = 1.0;
+  double _speechRate = 0.5;
   String _language = 'en-US';
   VoiceInstruction? _lastInstruction;
 

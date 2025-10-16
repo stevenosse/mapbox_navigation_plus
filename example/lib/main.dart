@@ -39,6 +39,9 @@ class NavigationDemo extends StatefulWidget {
 
 class _NavigationDemoState extends State<NavigationDemo>
     implements NavigationEventListener {
+  final locationProvider = DefaultLocationProvider();
+  final progressTracker = DefaultRouteProgressTracker();
+  final voiceGuidance = DefaultVoiceGuidance();
   // Mapbox access token is loaded from variables.json
   // Get your token from: https://account.mapbox.com/access-tokens/
   String get _mapboxAccessToken => Config.instance.mapboxAccessToken;
@@ -466,11 +469,6 @@ class _NavigationDemoState extends State<NavigationDemo>
 
   Future<void> _initializeNavigation() async {
     if (_mapController == null) return;
-
-    // Create real implementations for actual navigation
-    final locationProvider = DefaultLocationProvider();
-    final progressTracker = DefaultRouteProgressTracker();
-    final voiceGuidance = DefaultVoiceGuidance();
 
     // Initialize voice guidance
     try {

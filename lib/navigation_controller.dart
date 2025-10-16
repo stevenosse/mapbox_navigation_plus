@@ -18,7 +18,6 @@ import 'core/models/routing_options.dart';
 import 'core/models/location_puck_config.dart';
 import 'core/models/destination_pin_config.dart';
 import 'services/routing/mapbox_routing_engine.dart';
-import 'services/camera/camera_controller.dart';
 import 'ui/navigation_view/mapbox_map_controller.dart';
 
 /// Main navigation controller that orchestrates all navigation components
@@ -38,9 +37,6 @@ class NavigationController implements NavController {
 
   @override
   final MapControllerInterface mapController;
-
-  // Waze-like camera controller for immersive navigation
-  late final CameraController _cameraController;
 
   // Route styling configuration
   RouteStyleConfig _routeStyleConfig = RouteStyleConfig.defaultConfig;
@@ -90,10 +86,7 @@ class NavigationController implements NavController {
        _locationPuckConfig =
            locationPuckConfig ?? LocationPuckThemes.defaultTheme,
        _destinationPinConfig =
-           destinationPinConfig ?? DestinationPinConfig.defaultConfig {
-    // Initialize camera controller (includes road transition effects)
-    _cameraController = CameraController(mapController);
-  }
+           destinationPinConfig ?? DestinationPinConfig.defaultConfig;
 
   /// Updates the route style configuration
   void updateRouteStyleConfig(RouteStyleConfig config) {
@@ -260,9 +253,9 @@ class NavigationController implements NavController {
   }) async {
     try {
       _currentRoute = route;
+      mapController.setFollowingLocation(true);
       _updateState(NavigationState.navigating);
 
-      // Update location puck to navigation image when navigation starts
       await mapController.setNavigationLocationPuck();
 
       // Draw route on map
@@ -271,7 +264,6 @@ class NavigationController implements NavController {
         styleConfig: _routeStyleConfig,
       );
 
-      // Show destination pin at the route destination
       await showDestinationPin(route.destination);
 
       if (_locationSubscription == null) {
@@ -281,13 +273,11 @@ class NavigationController implements NavController {
         );
       }
 
-      // Start progress tracking
       await progressTracker.startTracking(
         route: route,
         locationStream: locationProvider.locationStream,
       );
 
-      // Subscribe to progress events
       _progressSubscription = progressTracker.progressStream.listen(
         _onProgressUpdate,
       );
@@ -301,8 +291,11 @@ class NavigationController implements NavController {
         (_) => _onArrival(),
       );
 
-      // Center map on route
-      await mapController.centerOnLocation(location: route.origin, zoom: 17.0);
+      await mapController.centerOnLocation(
+        location: route.origin,
+        zoom: 20.0,
+        followLocation: true,
+      );
 
       return NavigationResult.success();
     } catch (e) {
@@ -475,17 +468,14 @@ class NavigationController implements NavController {
         originalRoute: _currentRoute!,
       );
 
-      // Update current route
       _currentRoute = newRoute;
 
-      // Restart progress tracking with new route
       await progressTracker.stopTracking();
       await progressTracker.startTracking(
         route: newRoute,
         locationStream: locationProvider.locationStream,
       );
 
-      // Update map
       await mapController.drawRoute(
         route: newRoute,
         styleConfig: _routeStyleConfig,
@@ -542,20 +532,6 @@ class NavigationController implements NavController {
 
   void _onLocationUpdate(LocationPoint location) {
     mapController.updateLocationPuck(location);
-
-    if (mapController.isFollowingLocation) {
-      if (_currentState == NavigationState.navigating) {
-        _cameraController.updateCamera(
-          location: location,
-          routeProgress: _currentProgress,
-        );
-      } else {
-        _cameraController.updateCamera(
-          location: location,
-          routeProgress: null,
-        );
-      }
-    }
   }
 
   void _onProgressUpdate(RouteProgress progress) {
@@ -615,9 +591,6 @@ class NavigationController implements NavController {
   /// Dispose resources
   void dispose() {
     stopNavigation();
-
-    // Dispose Waze-like camera controller (includes road transition effects)
-    _cameraController.dispose();
 
     _stateController.close();
     _progressController.close();

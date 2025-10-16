@@ -70,6 +70,11 @@ class _NavigationViewState extends State<NavigationView> {
             _mapController = MapboxMapController(mapboxMap);
             widget.onMapCreated?.call(_mapController!);
           },
+          viewport: mb.FollowPuckViewportState(
+            zoom: 18.5,
+            bearing: mb.FollowPuckViewportStateBearingHeading(),
+            pitch: 45.0,
+          ),
           onStyleLoadedListener: (data) async {
             await _setupLocationPuck();
             await _setupCustomMarkers();
