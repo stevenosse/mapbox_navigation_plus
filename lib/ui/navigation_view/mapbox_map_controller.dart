@@ -707,17 +707,6 @@ class MapboxMapController implements MapControllerInterface {
         heading = _calculateHeading(_lastLocation!, location);
       }
 
-      if (_isFollowingLocation) {
-        await moveCamera(
-          center: location,
-          bearing: heading,
-          animation: const CameraAnimation(
-            duration: Duration(milliseconds: 500),
-            type: AnimationType.easeInOut,
-          ),
-        );
-      }
-
       _lastLocation = location;
     } catch (e) {
       throw Exception('Failed to update location puck: $e');

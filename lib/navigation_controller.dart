@@ -550,13 +550,9 @@ class NavigationController implements NavController {
           routeProgress: _currentProgress,
         );
       } else {
-        mapController.moveCamera(
-          center: location,
-          zoom: 17.0,
-          animation: const CameraAnimation(
-            duration: Duration(milliseconds: 400),
-            type: AnimationType.easeInOut,
-          ),
+        _cameraController.updateCamera(
+          location: location,
+          routeProgress: null,
         );
       }
     }

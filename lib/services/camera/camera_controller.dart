@@ -39,10 +39,23 @@ class CameraController {
   static const double _maxPitch = 75.0;
   static const double _lowSpeedThreshold = 5.0; // m/s (~18 km/h)
   static const double _highSpeedThreshold = 25.0; // m/s (~90 km/h)
-  static const double _turnAnimationDuration = 500; // milliseconds
-  static const int _fastTurnAnimationDuration = 400; // for quick corrections
   static const double _maxTurnRate = 180.0; // degrees per second
   static const double _headingTolerance = 2.0; // degrees
+
+  // Standardized animation durations (milliseconds)
+  static const int _quickAnimationDuration = 200; // Quick updates
+  static const int _standardAnimationDuration = 400; // Standard transitions
+  static const int _slowAnimationDuration = 800; // Slow transitions
+  static const int _verySlowAnimationDuration = 1500; // Very slow transitions
+
+  // Turn animation durations
+  static const int _turnAnimationDuration = 500; // milliseconds
+  static const int _fastTurnAnimationDuration = 300; // for quick corrections
+
+  // Animation performance
+  static const int _turnAnimationFps = 30; // Reduced from 60fps for better performance
+  static const int _speedAnimationFps = 20; // 20fps for speed adjustments
+  static const int _smoothUpdateDuration = 50; // Minimal animation for smooth updates
 
   CameraController(this._mapController)
     : _roadTransitionEffects = RoadTransitionEffects() {
@@ -58,7 +71,7 @@ class CameraController {
     _previousLocation = _currentLocation;
     _currentLocation = location;
 
-    // Update road transition effects
+    // Update road transition effects only during navigation
     if (routeProgress != null) {
       _roadTransitionEffects.updateRoadType(
         location: location,
@@ -75,6 +88,9 @@ class CameraController {
       routeProgress: routeProgress,
     );
 
+    // Cancel any existing animations to prevent conflicts
+    _cancelAllAnimations();
+
     // Apply smooth heading changes for turns
     await _applySmoothHeadingChange(cameraParams.bearing);
 
@@ -82,17 +98,7 @@ class CameraController {
     await _applySpeedBasedAdjustments(cameraParams);
 
     // Move camera with fixed user position (user stays at screen center)
-    await _mapController.moveCamera(
-      center: location,
-      zoom: cameraParams.zoom,
-      bearing: _currentHeading,
-      pitch: cameraParams.pitch,
-      heading: _currentHeading,
-      animation: CameraAnimation(
-        duration: Duration(milliseconds: cameraParams.animationDuration),
-        type: AnimationType.linear,
-      ),
-    );
+    await _executeCameraMove(cameraParams);
   }
 
   /// Updates speed and heading from location data
@@ -163,9 +169,9 @@ class CameraController {
     // Base parameters
     double zoom = _calculateSpeedBasedZoom();
     double pitch = _calculateSpeedBasedPitch();
-    int animationDuration = 100; // Fast updates for smooth movement
+    int animationDuration = _quickAnimationDuration; // Quick updates for smooth movement
 
-    // Adjust for upcoming maneuvers
+    // During navigation, use navigation-specific logic
     if (routeProgress != null) {
       final maneuverAdjustments = _calculateManeuverAdjustments(routeProgress);
 
@@ -181,8 +187,13 @@ class CameraController {
 
       // Slower animation for complex maneuvers
       if (maneuverAdjustments.isComplexManeuver) {
-        animationDuration = 200;
+        animationDuration = _standardAnimationDuration;
       }
+    } else {
+      // Non-navigation state: use standard zoom and pitch
+      zoom = 17.0;
+      pitch = 45.0;
+      animationDuration = _standardAnimationDuration;
     }
 
     return CameraParameters(
@@ -368,8 +379,7 @@ class CameraController {
       int animationDuration;
       if (turnMagnitude > 90) {
         // Large turns need more time
-        animationDuration = (_turnAnimationDuration * 1.5 / speedFactor)
-            .round();
+        animationDuration = (_standardAnimationDuration / speedFactor).round();
       } else if (turnMagnitude < 15) {
         // Small corrections can be faster
         animationDuration = (_fastTurnAnimationDuration / speedFactor).round();
@@ -393,7 +403,7 @@ class CameraController {
       final startTime = DateTime.now();
 
       _smoothTurnTimer = Timer.periodic(
-        const Duration(milliseconds: 16), // ~60fps
+        Duration(milliseconds: (1000 / _turnAnimationFps).round()), // 30fps for better performance
         (timer) {
           final elapsed = DateTime.now().difference(startTime).inMilliseconds;
           final progress = (elapsed / animationDuration).clamp(0.0, 1.0);
@@ -444,9 +454,7 @@ class CameraController {
       const animationDuration = 1000; // 1 second for smooth speed adjustments
 
       _speedAdjustmentTimer = Timer.periodic(
-        const Duration(
-          milliseconds: 50,
-        ), // 20fps for smooth but efficient updates
+        Duration(milliseconds: (1000 / _speedAnimationFps).round()), // 20fps for smooth updates
         (timer) {
           final elapsed = DateTime.now().difference(startTime).inMilliseconds;
           final progress = (elapsed / animationDuration).clamp(0.0, 1.0);
@@ -460,17 +468,11 @@ class CameraController {
             final interpolatedPitch =
                 currentPitch + ((params.pitch - currentPitch) * easedProgress);
 
-            // Apply the interpolated values
-            _mapController.moveCamera(
-              center: _currentLocation!,
+            // Apply the interpolated values with minimal animation for smoothness
+            _executeSmoothCameraUpdate(
               zoom: interpolatedZoom,
               pitch: interpolatedPitch,
               bearing: params.bearing,
-              heading: params.bearing, // Use bearing as heading for consistency
-              animation: const CameraAnimation(
-                duration: Duration(milliseconds: 300),
-                type: AnimationType.linear,
-              ),
             );
           }
         },
@@ -514,10 +516,54 @@ class CameraController {
     return t < 0.5 ? 8 * t * t * t * t : 1 - math.pow(-2 * t + 2, 4) / 2;
   }
 
-  /// Disposes resources
-  void dispose() {
+  /// Cancels all ongoing animations to prevent conflicts
+  void _cancelAllAnimations() {
     _smoothTurnTimer?.cancel();
     _speedAdjustmentTimer?.cancel();
+    _isAnimatingTurn = false;
+  }
+
+  /// Executes a camera move with coordinated animation
+  Future<void> _executeCameraMove(CameraParameters params) async {
+    if (_currentLocation == null) return;
+
+    await _mapController.moveCamera(
+      center: _currentLocation!,
+      zoom: params.zoom,
+      bearing: params.bearing,
+      pitch: params.pitch,
+      heading: params.bearing,
+      animation: CameraAnimation(
+        duration: Duration(milliseconds: params.animationDuration),
+        type: AnimationType.linear,
+      ),
+    );
+  }
+
+  /// Executes smooth camera updates without conflicting with other animations
+  Future<void> _executeSmoothCameraUpdate({
+    required double zoom,
+    required double pitch,
+    required double bearing,
+  }) async {
+    if (_currentLocation == null) return;
+
+    await _mapController.moveCamera(
+      center: _currentLocation!,
+      zoom: zoom,
+      pitch: pitch,
+      bearing: bearing,
+      heading: bearing,
+      animation: CameraAnimation(
+        duration: Duration(milliseconds: _smoothUpdateDuration),
+        type: AnimationType.linear,
+      ),
+    );
+  }
+
+  /// Disposes resources
+  void dispose() {
+    _cancelAllAnimations();
     _roadTransitionEffects.dispose();
   }
 
@@ -532,38 +578,38 @@ class CameraController {
     // Apply camera adjustments based on road transition
     double zoomDelta = 0.0;
     double pitchDelta = 0.0;
-    Duration duration = const Duration(milliseconds: 500);
+    int durationMs = _standardAnimationDuration;
 
     switch (event.effect) {
       case TransitionEffect.highwayEntrance:
         // Zoom out and increase pitch for highway perspective
         zoomDelta = -1.0;
         pitchDelta = 5.0;
-        duration = const Duration(milliseconds: 1500);
+        durationMs = _verySlowAnimationDuration;
         break;
       case TransitionEffect.highwayExit:
         // Zoom in and decrease pitch for local roads
         zoomDelta = 1.0;
         pitchDelta = -5.0;
-        duration = const Duration(milliseconds: 1500);
+        durationMs = _verySlowAnimationDuration;
         break;
       case TransitionEffect.urbanToResidential:
         // Subtle zoom in for residential areas
         zoomDelta = 0.5;
         pitchDelta = -2.0;
-        duration = const Duration(milliseconds: 1000);
+        durationMs = _slowAnimationDuration;
         break;
       case TransitionEffect.residentialToUrban:
         // Zoom out for urban areas
         zoomDelta = -0.5;
         pitchDelta = 2.0;
-        duration = const Duration(milliseconds: 1000);
+        durationMs = _slowAnimationDuration;
         break;
       default:
         // Generic transition - minimal adjustment
         zoomDelta = 0.0;
         pitchDelta = 0.0;
-        duration = const Duration(milliseconds: 500);
+        durationMs = _standardAnimationDuration;
     }
 
     // Calculate target camera parameters with transition adjustments
@@ -578,7 +624,7 @@ class CameraController {
       bearing: _currentHeading,
       heading: _currentHeading,
       animation: CameraAnimation(
-        duration: duration,
+        duration: Duration(milliseconds: durationMs),
         type: AnimationType.easeInOut,
       ),
     );
