@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'package:mapbox_navigation_plus/core/models/maneuver.dart';
 
-import '../models/route_model.dart';
-import '../models/location_point.dart';
-import '../models/route_progress.dart';
-import '../models/navigation_state.dart';
-import '../models/routing_options.dart';
-import '../interfaces/routing_engine.dart';
-import '../interfaces/location_provider.dart';
-import '../interfaces/voice_guidance.dart';
-import '../interfaces/route_progress_tracker.dart';
-import '../interfaces/map_controller_interface.dart';
+import 'package:mapbox_navigation_plus/core/models/location_point.dart';
+import 'package:mapbox_navigation_plus/core/models/route_model.dart';
+import 'package:mapbox_navigation_plus/core/models/route_result.dart';
+import 'package:mapbox_navigation_plus/core/models/route_progress.dart';
+import 'package:mapbox_navigation_plus/core/models/maneuver.dart';
+import 'package:mapbox_navigation_plus/core/models/navigation_state.dart';
+import 'package:mapbox_navigation_plus/core/models/routing_options.dart';
+import 'package:mapbox_navigation_plus/core/interfaces/routing_engine.dart';
+import 'package:mapbox_navigation_plus/core/interfaces/location_provider.dart';
+import 'package:mapbox_navigation_plus/core/interfaces/route_progress_tracker.dart';
+import 'package:mapbox_navigation_plus/core/interfaces/voice_guidance.dart';
+import 'package:mapbox_navigation_plus/core/interfaces/map_controller_interface.dart';
 
 /// Main navigation controller interface that orchestrates all navigation components
 abstract class NavController {
@@ -49,6 +50,17 @@ abstract class NavController {
   /// Starts navigation with a pre-calculated route
   Future<NavigationResult> startNavigationWithRoute({
     required RouteModel route,
+  });
+
+  /// Requests multiple routes with different optimization criteria
+  /// Returns a list of RouteResult objects that can be displayed on the map
+  /// for user selection before starting navigation
+  Future<List<RouteResult>> requestMultipleRoutes({
+    required LocationPoint origin,
+    required LocationPoint destination,
+    required List<RouteType> routeTypes,
+    List<LocationPoint>? waypoints,
+    RoutingOptions? baseOptions,
   });
 
   /// Stops navigation

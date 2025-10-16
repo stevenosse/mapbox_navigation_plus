@@ -1,3 +1,4 @@
+import 'package:example/multiple_routes_example.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
 import 'package:geocoding/geocoding.dart';
@@ -25,7 +26,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mapbox Navigation Demo',
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: const NavigationDemo(),
+      home: MultipleRoutesExample(
+        mapboxAccessToken: Config.instance.mapboxAccessToken,
+      ),
     );
   }
 }

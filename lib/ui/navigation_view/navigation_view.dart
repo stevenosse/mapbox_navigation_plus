@@ -4,8 +4,9 @@ import 'mapbox_map_controller.dart';
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/location_point.dart';
 import '../../core/models/route_progress.dart';
+import '../../core/models/route_result.dart';
+import '../widgets/route_selection_widget.dart';
 
-/// Flutter widget for displaying navigation map
 class NavigationView extends StatefulWidget {
   final MapControllerInterface? controller;
   final String mapboxAccessToken;
@@ -15,6 +16,12 @@ class NavigationView extends StatefulWidget {
   final bool enableLocation;
   final RouteProgress? routeProgress;
   final void Function(MapboxMapController)? onMapCreated;
+  
+  // Route selection parameters
+  final List<RouteResult>? availableRoutes;
+  final bool showRouteSelection;
+  final Function(RouteResult)? onRouteSelected;
+  final VoidCallback? onRouteSelectionCancelled;
 
   const NavigationView({
     super.key,
@@ -26,6 +33,10 @@ class NavigationView extends StatefulWidget {
     this.enableLocation = true,
     this.routeProgress,
     this.onMapCreated,
+    this.availableRoutes,
+    this.showRouteSelection = false,
+    this.onRouteSelected,
+    this.onRouteSelectionCancelled,
   });
 
   @override
@@ -62,6 +73,19 @@ class _NavigationViewState extends State<NavigationView> {
             await _setupCustomMarkers();
           },
         ),
+        
+        // Route selection overlay
+        if (widget.showRouteSelection && widget.availableRoutes != null && widget.onRouteSelected != null)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: RouteSelectionWidget(
+              routes: widget.availableRoutes!,
+              onRouteSelected: widget.onRouteSelected!,
+              onCancel: widget.onRouteSelectionCancelled,
+            ),
+          ),
       ],
     );
   }

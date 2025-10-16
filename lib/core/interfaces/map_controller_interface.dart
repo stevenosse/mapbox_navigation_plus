@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../models/route_model.dart';
+import '../models/route_result.dart';
 import '../models/location_point.dart';
 import '../models/route_progress.dart';
 import '../models/map_marker.dart';
@@ -14,6 +15,21 @@ abstract class MapControllerInterface {
     required RouteModel route,
     RouteStyleConfig? styleConfig,
   });
+
+  /// Draws multiple routes on the map for route selection
+  /// Each route will be styled differently to distinguish them
+  /// Returns a map of route IDs to their visual representations
+  Future<Map<String, String>> drawMultipleRoutes({
+    required List<RouteResult> routes,
+    RouteStyleConfig? baseStyleConfig,
+    bool highlightFastest = true,
+  });
+
+  /// Clears multiple routes from the map
+  Future<void> clearMultipleRoutes();
+
+  /// Highlights a specific route from multiple routes
+  Future<void> highlightRoute(String routeId);
 
   /// Updates the progress line along the route (shows traveled vs remaining)
   Future<void> updateProgressLine({

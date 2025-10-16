@@ -34,6 +34,7 @@ export 'core/models/routing_options.dart';
 export 'core/models/route_style_config.dart';
 export 'core/models/location_puck_config.dart';
 export 'core/models/destination_pin_config.dart';
+export 'core/models/route_result.dart';
 
 // Services
 export 'services/routing/mapbox_routing_engine.dart';
@@ -42,8 +43,8 @@ export 'services/progress/default_route_progress_tracker.dart';
 export 'services/voice/default_voice_guidance.dart';
 
 // UI Components
-export 'ui/map_widget/map_widget.dart';
-export 'ui/map_widget/mapbox_map_controller.dart';
+export 'ui/navigation_view/navigation_view.dart';
+export 'ui/navigation_view/mapbox_map_controller.dart';
 
 // Main navigation controller
 export 'navigation_controller.dart';

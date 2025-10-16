@@ -8,6 +8,7 @@ import 'core/interfaces/voice_guidance.dart';
 import 'core/interfaces/map_controller_interface.dart';
 import 'core/models/location_point.dart';
 import 'core/models/route_model.dart';
+import 'core/models/route_result.dart';
 import 'core/models/route_progress.dart';
 import 'core/models/maneuver.dart';
 import 'core/models/navigation_state.dart';
@@ -18,7 +19,7 @@ import 'core/models/location_puck_config.dart';
 import 'core/models/destination_pin_config.dart';
 import 'services/routing/mapbox_routing_engine.dart';
 import 'services/camera/camera_controller.dart';
-import 'ui/map_widget/mapbox_map_controller.dart';
+import 'ui/navigation_view/mapbox_map_controller.dart';
 
 /// Main navigation controller that orchestrates all navigation components
 class NavigationController implements NavController {
@@ -318,6 +319,43 @@ class NavigationController implements NavController {
   }
 
   @override
+  Future<List<RouteResult>> requestMultipleRoutes({
+    required LocationPoint origin,
+    required LocationPoint destination,
+    required List<RouteType> routeTypes,
+    List<LocationPoint>? waypoints,
+    RoutingOptions? baseOptions,
+  }) async {
+    try {
+      final previousNavigationState = _currentState;
+      _updateState(NavigationState.routing);
+
+      // Use the routing engine's getMultipleRoutes method
+      final routeResults = await routingEngine.getMultipleRoutes(
+        origin: origin,
+        destination: destination,
+        routeTypes: routeTypes,
+        waypoints: waypoints,
+        baseOptions: baseOptions,
+      );
+
+      _updateState(previousNavigationState);
+      return routeResults;
+    } catch (e) {
+      final error = NavigationError(
+        type: NavigationErrorType.routingFailed,
+        message: 'Failed to calculate multiple routes: $e',
+        originalError: e,
+      );
+
+      _updateState(NavigationState.error);
+      _errorController.add(error);
+
+      return [];
+    }
+  }
+
+  @override
   Future<void> stopNavigation() async {
     try {
       _updateState(NavigationState.idle);
@@ -492,19 +530,11 @@ class NavigationController implements NavController {
     mapController.updateLocationPuck(location);
 
     if (_currentState == NavigationState.navigating) {
-      // Use Waze-like camera controller for immersive navigation
       _cameraController.updateCamera(
         location: location,
         routeProgress: _currentProgress,
       );
-
-      // Update road transition effects
-      if (_currentProgress != null) {
-        // Road transition effects are now handled directly by the Waze camera controller
-        // No separate call needed here
-      }
     } else {
-      // Idle/non-navigation camera behavior
       mapController.moveCamera(
         center: location,
         zoom: 17.0,
@@ -534,10 +564,13 @@ class NavigationController implements NavController {
   void _onManeuverUpdate(Maneuver maneuver) {
     _upcomingManeuverController.add(maneuver);
 
-    // Speak instruction
     if (voiceGuidance.isEnabled) {
-      // TODO: Create voice instruction from maneuver
-      // voiceGuidance.speak(instruction);
+      final instruction = VoiceInstruction(
+        announcement: maneuver.instruction,
+        distanceAlongGeometry: maneuver.distanceToManeuver,
+        triggerDistance: maneuver.distanceToManeuver,
+      );
+      voiceGuidance.speak(instruction);
     }
 
     for (final listener in _listeners) {
