@@ -28,9 +28,10 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   DateTime? _lastManeuverNotificationTime;
   LocationPoint? _lastLocation;
   bool _hasArrived = false;
+  Maneuver? _lastAnnouncedManeuver;
 
   double _deviationThreshold = 30.0;
-  double _maneuverNotificationThreshold = 200.0;
+  double _maneuverNotificationThreshold = 250.0;
 
   @override
   Future<void> startTracking({
@@ -46,6 +47,7 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _isTracking = true;
     _hasArrived = false;
     _lastManeuverNotificationTime = null;
+    _lastAnnouncedManeuver = null;
 
     _locationSubscription = locationStream.listen(
       _onLocationUpdate,
@@ -79,6 +81,7 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _lastManeuverNotificationTime = null;
     _lastLocation = null;
     _hasArrived = false;
+    _lastAnnouncedManeuver = null;
   }
 
   @override
@@ -165,25 +168,47 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     final distanceToManeuver = _currentProgress!.distanceToNextManeuver;
     final now = DateTime.now();
 
+    // Check if this is the same maneuver as the last announced one
+    bool isSameManeuver = _lastAnnouncedManeuver != null &&
+        _lastAnnouncedManeuver!.stepIndex == upcomingManeuver.stepIndex &&
+        _lastAnnouncedManeuver!.legIndex == upcomingManeuver.legIndex &&
+        _lastAnnouncedManeuver!.type == upcomingManeuver.type &&
+        _lastAnnouncedManeuver!.modifier == upcomingManeuver.modifier;
+
     // Check if we should notify about upcoming maneuver
     bool shouldNotify = false;
 
     if (_lastManeuverNotificationTime == null) {
-      // First notification
+      // First notification - announce when within threshold
       shouldNotify = distanceToManeuver <= _maneuverNotificationThreshold;
     } else {
       final timeSinceLastNotification = now.difference(
         _lastManeuverNotificationTime!,
       );
 
-      // Notify if we're getting close to maneuver or if enough time has passed
-      if (distanceToManeuver <= _maneuverNotificationThreshold &&
-          timeSinceLastNotification.inSeconds > 30) {
+      // Don't notify if it's the same maneuver and we've already announced it recently
+      if (isSameManeuver && timeSinceLastNotification.inSeconds < 45) {
+        return;
+      }
+
+      // Check for early announcement (complex maneuvers or highway exits)
+      bool isComplexManeuver = _isComplexManeuver(upcomingManeuver);
+      double earlyNotificationDistance = isComplexManeuver ? 350.0 : 250.0;
+
+      // Notify if we're at the optimal announcement distance
+      if (distanceToManeuver <= earlyNotificationDistance &&
+          timeSinceLastNotification.inSeconds > 15) {
         shouldNotify = true;
       }
-      // Urgent notification when very close
-      else if (distanceToManeuver <= 50.0 &&
-          timeSinceLastNotification.inSeconds > 10) {
+      // Urgent notification when very close (but only if not the same maneuver recently announced)
+      else if (distanceToManeuver <= 40.0 &&
+          timeSinceLastNotification.inSeconds > 8 &&
+          !isSameManeuver) {
+        shouldNotify = true;
+      }
+      // Final reminder when very close to maneuver
+      else if (distanceToManeuver <= 15.0 && isSameManeuver &&
+          timeSinceLastNotification.inSeconds > 20) {
         shouldNotify = true;
       }
     }
@@ -191,6 +216,27 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     if (shouldNotify) {
       _maneuverController.add(upcomingManeuver);
       _lastManeuverNotificationTime = now;
+      _lastAnnouncedManeuver = upcomingManeuver;
+    }
+  }
+
+  /// Determines if a maneuver is complex and needs earlier announcement
+  bool _isComplexManeuver(Maneuver maneuver) {
+    // Highway exits and complex turns need earlier announcements
+    switch (maneuver.type) {
+      case ManeuverType.offRamp:
+      case ManeuverType.fork:
+      case ManeuverType.roundabout:
+      case ManeuverType.exitRotary:
+      case ManeuverType.exitRoundabout:
+        return true;
+      case ManeuverType.turn:
+      case ManeuverType.merge:
+        return maneuver.modifier == ManeuverModifier.uTurn ||
+               maneuver.modifier == ManeuverModifier.sharpLeft ||
+               maneuver.modifier == ManeuverModifier.sharpRight;
+      default:
+        return false;
     }
   }
 

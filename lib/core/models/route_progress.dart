@@ -55,19 +55,26 @@ class RouteProgress {
   final double distanceRemainingInCurrentStep;
 
   /// Progress along the route (0.0 to 1.0)
-  double get routeProgress => route.distance > 0 ? distanceTraveled / route.distance : 0.0;
+  double get routeProgress =>
+      route.distance > 0 ? distanceTraveled / route.distance : 0.0;
 
   /// Progress along current leg (0.0 to 1.0)
-  double get legProgress => currentLeg.distance > 0 ? distanceTraveledInCurrentLeg / currentLeg.distance : 0.0;
+  double get legProgress => currentLeg.distance > 0
+      ? distanceTraveledInCurrentLeg / currentLeg.distance
+      : 0.0;
 
   /// Progress along current step (0.0 to 1.0)
-  double get stepProgress => currentStep.distance > 0 ? distanceTraveledInCurrentStep / currentStep.distance : 0.0;
+  double get stepProgress => currentStep.distance > 0
+      ? distanceTraveledInCurrentStep / currentStep.distance
+      : 0.0;
 
   /// Estimated time of arrival
-  DateTime get eta => DateTime.now().add(Duration(seconds: durationRemaining.round()));
+  DateTime get eta =>
+      DateTime.now().add(Duration(seconds: durationRemaining.round()));
 
   /// Current road name
-  String get currentRoadName => currentStep.name.isNotEmpty ? currentStep.name : currentLeg.summary;
+  String get currentRoadName =>
+      currentStep.name.isNotEmpty ? currentStep.name : currentLeg.summary;
 
   /// Whether user is on the route
   final bool isOnRoute;
@@ -134,56 +141,78 @@ class RouteProgress {
     }
 
     // Default to first leg and step if not found
-    currentLeg ??= route.legs.isNotEmpty ? route.legs.first : Leg(
-      steps: [],
-      distance: 0.0,
-      duration: 0.0,
-      summary: '',
-      startLocation: route.origin,
-      endLocation: route.destination,
-      index: 0,
-    );
-    currentStep ??= currentLeg.steps.isNotEmpty ? currentLeg.steps.first : Step(
-      geometry: [],
-      distance: 0.0,
-      duration: 0.0,
-      maneuver: Maneuver(
-        type: ManeuverType.depart,
-        instruction: 'Depart',
-        distanceToManeuver: 0.0,
-        location: currentLocation,
-        stepIndex: 0,
-        legIndex: 0,
-      ),
-      voiceInstructions: [],
-      name: '',
-      mode: 'driving',
-      intersections: [],
-      index: 0,
-    );
+    currentLeg ??= route.legs.isNotEmpty
+        ? route.legs.first
+        : Leg(
+            steps: [],
+            distance: 0.0,
+            duration: 0.0,
+            summary: '',
+            startLocation: route.origin,
+            endLocation: route.destination,
+            index: 0,
+          );
+    currentStep ??= currentLeg.steps.isNotEmpty
+        ? currentLeg.steps.first
+        : Step(
+            geometry: [],
+            distance: 0.0,
+            duration: 0.0,
+            maneuver: Maneuver(
+              type: ManeuverType.depart,
+              instruction: 'Depart',
+              distanceToManeuver: 0.0,
+              location: currentLocation,
+              stepIndex: 0,
+              legIndex: 0,
+            ),
+            voiceInstructions: [],
+            name: '',
+            mode: 'driving',
+            intersections: [],
+            index: 0,
+          );
 
     // Calculate distances
-    final distanceTraveledInCurrentLeg = currentLeg.calculateDistanceTraveled(currentLocation);
-    final distanceRemainingInCurrentLeg = currentLeg.getRemainingDistance(currentLocation);
-    final distanceTraveledInCurrentStep = currentStep.getDistanceTraveled(currentLocation);
-    final distanceRemainingInCurrentStep = currentStep.getRemainingDistance(currentLocation);
+    final distanceTraveledInCurrentLeg = currentLeg.calculateDistanceTraveled(
+      currentLocation,
+    );
+    final distanceRemainingInCurrentLeg = currentLeg.getRemainingDistance(
+      currentLocation,
+    );
+    final distanceTraveledInCurrentStep = currentStep.getDistanceTraveled(
+      currentLocation,
+    );
+    final distanceRemainingInCurrentStep = currentStep.getRemainingDistance(
+      currentLocation,
+    );
 
     // Calculate distance to next maneuver
-    final upcomingStep = currentLeg.getUpcomingStep(currentLocation, distanceTraveledInCurrentLeg);
+    final upcomingStep = currentLeg.getUpcomingStep(
+      currentLocation,
+      distanceTraveledInCurrentLeg,
+    );
     double distanceToNextManeuver = 0.0;
-    if (upcomingStep != null && upcomingStep != currentStep) {
-      distanceToNextManeuver = distanceRemainingInCurrentStep + upcomingStep.maneuver.distanceToManeuver;
+
+    if (upcomingStep != null) {
+      if (upcomingStep == currentStep) {
+        distanceToNextManeuver = distanceRemainingInCurrentStep;
+      } else {
+        distanceToNextManeuver =
+            distanceRemainingInCurrentStep +
+            upcomingStep.maneuver.distanceToManeuver;
+      }
     } else {
       distanceToNextManeuver = distanceRemainingInCurrentStep;
     }
 
-    // Calculate total remaining distance and duration
     final distanceRemaining = route.getRemainingDistance(currentLocation);
     final durationRemaining = route.getRemainingDuration(currentLocation);
 
-    // Check if on route
     final isOnRoute = route.isLocationOnRoute(currentLocation);
-    final distanceFromRoute = isOnRoute ? 0.0 : route.getDistanceFromRoute(currentLocation);
+    final distanceFromRoute = isOnRoute
+        ? 0.0
+        : route.getDistanceFromRoute(currentLocation);
 
     return RouteProgress(
       currentLocation: currentLocation,
@@ -192,7 +221,9 @@ class RouteProgress {
       currentStepIndex: currentStepIndex,
       distanceTraveled: totalDistanceTraveled + distanceTraveledInCurrentLeg,
       distanceRemaining: distanceRemaining,
-      durationTraveled: totalDurationTraveled + (DateTime.now().difference(startTime).inSeconds.toDouble()),
+      durationTraveled:
+          totalDurationTraveled +
+          (DateTime.now().difference(startTime).inSeconds.toDouble()),
       durationRemaining: durationRemaining,
       distanceToNextManeuver: distanceToNextManeuver,
       distanceTraveledInCurrentLeg: distanceTraveledInCurrentLeg,
@@ -275,5 +306,6 @@ class RouteProgress {
           currentStepIndex == other.currentStepIndex;
 
   @override
-  int get hashCode => Object.hash(currentLocation, route, currentLegIndex, currentStepIndex);
+  int get hashCode =>
+      Object.hash(currentLocation, route, currentLegIndex, currentStepIndex);
 }

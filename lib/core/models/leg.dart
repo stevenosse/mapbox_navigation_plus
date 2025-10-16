@@ -118,10 +118,28 @@ class Leg {
     final currentStep = getCurrentStep(currentLocation, distanceTraveledInLeg);
     if (currentStep == null) return null;
 
-    // If current step has a maneuver and we're close to it, return next step
     final distanceRemainingInStep = currentStep.getRemainingDistance(currentLocation);
-    if (distanceRemainingInStep < 50.0) { // Within 50m of maneuver
+
+    // If we're very close to the current maneuver (< 30m), we should be announcing the next one
+    if (distanceRemainingInStep < 30.0) {
       return getNextStep(currentStep);
+    }
+
+    // If we're at a good announcement distance for the current maneuver (30-300m),
+    // keep the current step for announcement
+    if (distanceRemainingInStep >= 30.0 && distanceRemainingInStep <= 300.0) {
+      return currentStep;
+    }
+
+    // If we're far from the current maneuver (> 300m), check if there's a next step
+    // that should be announced instead (for close maneuver sequences)
+    final nextStep = getNextStep(currentStep);
+    if (nextStep != null && distanceRemainingInStep > 300.0) {
+      // Check if the next maneuver is very close after the current one
+      final combinedDistance = distanceRemainingInStep + nextStep.distance;
+      if (combinedDistance <= 350.0) {
+        return currentStep; // Announce current maneuver now, next one will be announced soon
+      }
     }
 
     return currentStep;
