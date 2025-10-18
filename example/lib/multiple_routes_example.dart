@@ -260,7 +260,6 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
       final routeToHighlight = _selectedRoute ?? _routes.first;
       await _mapController!.highlightRoute(routeToHighlight.id);
     } catch (e) {
-      print('Error displaying multiple routes: $e');
       // Fallback: draw just the selected route
       final routeToDraw = _selectedRoute ?? _routes.first;
       await _mapController!.drawRoute(route: routeToDraw);
@@ -275,16 +274,12 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
       _selectedRoute = route;
     });
 
-    // Highlight the selected route using the highlightRoute method
     try {
       await _mapController!.highlightRoute(route.id);
     } catch (e) {
-      print('Error highlighting route: $e');
-      // Fallback: redisplay all routes
       await _displayRoutesOnMap();
     }
 
-    // Optionally center the map on the selected route
     if (route.geometry.isNotEmpty) {
       await _mapController!.moveCamera(
         center: route.geometry[route.geometry.length ~/ 2],

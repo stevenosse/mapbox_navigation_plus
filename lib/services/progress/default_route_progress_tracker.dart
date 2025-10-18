@@ -6,6 +6,13 @@ import '../../core/models/route_progress.dart';
 import '../../core/models/location_point.dart';
 import '../../core/models/maneuver.dart';
 
+/// Road type classification for adaptive timing
+enum NavigationRoadType {
+  highway,
+  suburban,
+  urban,
+}
+
 /// Real implementation of RouteProgressTracker
 class DefaultRouteProgressTracker implements RouteProgressTracker {
   final StreamController<RouteProgress> _progressController =
@@ -32,6 +39,18 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
 
   double _deviationThreshold = 30.0;
   double _maneuverNotificationThreshold = 250.0;
+
+  // Speed-based timing configuration
+  double _currentSpeed = 0.0; // m/s
+  DateTime? _lastSpeedCalculationTime;
+  static const double _citySpeedThreshold = 15.6; // ~35 mph in m/s
+  static const double _highwaySpeedThreshold = 24.6; // ~55 mph in m/s
+
+  // Adaptive timing buffers (in seconds)
+  static const double _cityWarningTime = 10.0; // 10 seconds for city driving
+  static const double _highwayWarningTime = 25.0; // 25 seconds for highway driving
+  static const double _minAnnouncementDistance = 30.0; // Minimum 30m
+  static const double _maxAnnouncementDistance = 600.0; // Maximum 600m
 
   @override
   Future<void> startTracking({
@@ -82,6 +101,8 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _lastLocation = null;
     _hasArrived = false;
     _lastAnnouncedManeuver = null;
+    _currentSpeed = 0.0;
+    _lastSpeedCalculationTime = null;
   }
 
   @override
@@ -120,6 +141,9 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
 
   void _onLocationUpdate(LocationPoint location) {
     if (!_isTracking || _currentRoute == null || _startTime == null) return;
+
+    // Update speed calculation first
+    _updateCurrentSpeed(location);
 
     _currentProgress = RouteProgress.fromLocationAndRoute(
       currentLocation: location,
@@ -175,40 +199,69 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
         _lastAnnouncedManeuver!.type == upcomingManeuver.type &&
         _lastAnnouncedManeuver!.modifier == upcomingManeuver.modifier;
 
+    // Calculate adaptive announcement distance based on current conditions
+    final adaptiveDistance = _calculateAdaptiveAnnouncementDistance(upcomingManeuver);
+
     // Check if we should notify about upcoming maneuver
     bool shouldNotify = false;
 
     if (_lastManeuverNotificationTime == null) {
-      // First notification - announce when within threshold
-      shouldNotify = distanceToManeuver <= _maneuverNotificationThreshold;
+      // First notification - announce when within adaptive distance
+      shouldNotify = distanceToManeuver <= adaptiveDistance;
     } else {
       final timeSinceLastNotification = now.difference(
         _lastManeuverNotificationTime!,
       );
 
       // Don't notify if it's the same maneuver and we've already announced it recently
-      if (isSameManeuver && timeSinceLastNotification.inSeconds < 45) {
+      if (isSameManeuver && timeSinceLastNotification.inSeconds < 30) {
         return;
       }
 
-      // Check for early announcement (complex maneuvers or highway exits)
-      bool isComplexManeuver = _isComplexManeuver(upcomingManeuver);
-      double earlyNotificationDistance = isComplexManeuver ? 350.0 : 250.0;
+      // Use different thresholds based on road type and speed
+      final roadType = _getRoadType();
+      double reminderDistance;
+      double urgentDistance;
+      double cooldownPeriod;
 
-      // Notify if we're at the optimal announcement distance
-      if (distanceToManeuver <= earlyNotificationDistance &&
-          timeSinceLastNotification.inSeconds > 15) {
+      switch (roadType) {
+        case NavigationRoadType.highway:
+          reminderDistance = 100.0; // Highway reminder distance
+          urgentDistance = 50.0;   // Highway urgent distance
+          cooldownPeriod = 20.0;   // Longer cooldown for highway
+          break;
+        case NavigationRoadType.urban:
+          reminderDistance = 30.0;  // Urban reminder distance
+          urgentDistance = 15.0;    // Urban urgent distance
+          cooldownPeriod = 10.0;    // Shorter cooldown for city
+          break;
+        case NavigationRoadType.suburban:
+          reminderDistance = 60.0;  // Suburban reminder distance
+          urgentDistance = 30.0;    // Suburban urgent distance
+          cooldownPeriod = 15.0;    // Medium cooldown for suburban
+          break;
+      }
+
+      // Main announcement when within adaptive distance and past cooldown
+      if (distanceToManeuver <= adaptiveDistance &&
+          timeSinceLastNotification.inSeconds > cooldownPeriod) {
         shouldNotify = true;
       }
-      // Urgent notification when very close (but only if not the same maneuver recently announced)
-      else if (distanceToManeuver <= 40.0 &&
-          timeSinceLastNotification.inSeconds > 8 &&
+      // Reminder announcement when getting closer (but not for same maneuver recently)
+      else if (distanceToManeuver <= reminderDistance &&
+          timeSinceLastNotification.inSeconds > cooldownPeriod / 2 &&
           !isSameManeuver) {
         shouldNotify = true;
       }
-      // Final reminder when very close to maneuver
-      else if (distanceToManeuver <= 15.0 && isSameManeuver &&
-          timeSinceLastNotification.inSeconds > 20) {
+      // Urgent announcement when very close to maneuver point
+      else if (distanceToManeuver <= urgentDistance &&
+          timeSinceLastNotification.inSeconds > 5.0 &&
+          !isSameManeuver) {
+        shouldNotify = true;
+      }
+      // Final reminder for same maneuver if significant time has passed
+      else if (distanceToManeuver <= urgentDistance && isSameManeuver &&
+          timeSinceLastNotification.inSeconds > 25.0) {
         shouldNotify = true;
       }
     }
@@ -222,14 +275,36 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
 
   /// Determines if a maneuver is complex and needs earlier announcement
   bool _isComplexManeuver(Maneuver maneuver) {
-    // Highway exits and complex turns need earlier announcements
+    final roadType = _getRoadType();
+
+    // All highway maneuvers are inherently more complex due to high speeds
+    if (roadType == NavigationRoadType.highway) {
+      switch (maneuver.type) {
+        case ManeuverType.offRamp:
+        case ManeuverType.fork:
+        case ManeuverType.roundabout:
+        case ManeuverType.exitRotary:
+        case ManeuverType.exitRoundabout:
+        case ManeuverType.merge:
+          return true;
+        case ManeuverType.turn:
+          return maneuver.modifier == ManeuverModifier.uTurn ||
+                 maneuver.modifier == ManeuverModifier.sharpLeft ||
+                 maneuver.modifier == ManeuverModifier.sharpRight;
+        default:
+          return false;
+      }
+    }
+
+    // Urban maneuvers - different complexity criteria
     switch (maneuver.type) {
-      case ManeuverType.offRamp:
-      case ManeuverType.fork:
       case ManeuverType.roundabout:
       case ManeuverType.exitRotary:
       case ManeuverType.exitRoundabout:
-        return true;
+        return true; // Roundabouts are complex in any environment
+      case ManeuverType.offRamp:
+      case ManeuverType.fork:
+        return roadType == NavigationRoadType.suburban; // Only complex in suburban areas
       case ManeuverType.turn:
       case ManeuverType.merge:
         return maneuver.modifier == ManeuverModifier.uTurn ||
@@ -334,6 +409,141 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
         (_currentProgress!.routeProgress - _lastEmittedProgress!.routeProgress)
             .abs();
     return progressDiff > 0.005; // 0.5% change threshold
+  }
+
+  /// Updates current speed calculation based on location updates
+  void _updateCurrentSpeed(LocationPoint currentLocation) {
+    if (_lastLocation == null || _lastSpeedCalculationTime == null) {
+      _currentSpeed = 0.0;
+      _lastSpeedCalculationTime = currentLocation.timestamp;
+      return;
+    }
+
+    final timeDiff = currentLocation.timestamp
+        .difference(_lastSpeedCalculationTime!)
+        .inSeconds;
+
+    if (timeDiff <= 0) {
+      // Avoid division by zero or negative time
+      return;
+    }
+
+    // Calculate speed over a longer window for stability
+    final distance = currentLocation.distanceTo(_lastLocation!);
+    final instantSpeed = distance / timeDiff;
+
+    // Apply smoothing to prevent rapid speed fluctuations
+    if (_currentSpeed == 0.0) {
+      _currentSpeed = instantSpeed;
+    } else {
+      // Weighted average (70% previous, 30% new)
+      _currentSpeed = (_currentSpeed * 0.7) + (instantSpeed * 0.3);
+    }
+
+    // Reset calculation window every 5 seconds for fresh readings
+    if (timeDiff > 5) {
+      _lastSpeedCalculationTime = currentLocation.timestamp;
+    }
+  }
+
+  /// Determines road type based on current speed and route characteristics
+  NavigationRoadType _getRoadType() {
+    // Primary classification by speed
+    if (_currentSpeed >= _highwaySpeedThreshold) {
+      return NavigationRoadType.highway;
+    } else if (_currentSpeed <= _citySpeedThreshold) {
+      return NavigationRoadType.urban;
+    }
+
+    // For intermediate speeds, check current road characteristics
+    if (_currentProgress != null && _currentProgress!.currentRoadName.isNotEmpty) {
+      final roadName = _currentProgress!.currentRoadName.toLowerCase();
+
+      // Highway indicators
+      if (roadName.contains('highway') ||
+          roadName.contains('freeway') ||
+          roadName.contains('interstate') ||
+          roadName.contains('i-') ||
+          roadName.contains('us ') ||
+          roadName.contains('route ') ||
+          roadName.contains('exit')) {
+        return NavigationRoadType.highway;
+      }
+
+      // Urban indicators
+      if (roadName.contains('street') ||
+          roadName.contains('st ') ||
+          roadName.contains('avenue') ||
+          roadName.contains('rd ') ||
+          roadName.contains('boulevard') ||
+          roadName.contains('dr ')) {
+        return NavigationRoadType.urban;
+      }
+    }
+
+    // Default to suburban for intermediate speeds without clear indicators
+    return NavigationRoadType.suburban;
+  }
+
+  /// Calculates adaptive announcement distance based on speed and road type
+  double _calculateAdaptiveAnnouncementDistance(Maneuver maneuver) {
+    final roadType = _getRoadType();
+    double baseTime;
+
+    // Select appropriate warning time based on road type
+    switch (roadType) {
+      case NavigationRoadType.highway:
+        baseTime = _highwayWarningTime;
+        break;
+      case NavigationRoadType.urban:
+        baseTime = _cityWarningTime;
+        break;
+      case NavigationRoadType.suburban:
+        baseTime = (_cityWarningTime + _highwayWarningTime) / 2; // Average
+        break;
+    }
+
+    // Add extra time for complex maneuvers
+    if (_isComplexManeuver(maneuver)) {
+      baseTime += 5.0; // Extra 5 seconds for complex maneuvers
+    }
+
+    // Calculate distance = speed × time
+    double calculatedDistance = _currentSpeed * baseTime;
+
+    // Add complexity buffer based on maneuver type
+    calculatedDistance += _getComplexityBuffer(maneuver, roadType);
+
+    // Apply bounds
+    calculatedDistance = calculatedDistance.clamp(
+      _minAnnouncementDistance,
+      _maxAnnouncementDistance
+    );
+
+    return calculatedDistance;
+  }
+
+  /// Gets additional distance buffer for complex maneuvers
+  double _getComplexityBuffer(Maneuver maneuver, NavigationRoadType roadType) {
+    switch (maneuver.type) {
+      case ManeuverType.offRamp:
+      case ManeuverType.fork:
+        return roadType == NavigationRoadType.highway ? 100.0 : 50.0;
+      case ManeuverType.roundabout:
+      case ManeuverType.exitRotary:
+      case ManeuverType.exitRoundabout:
+        return roadType == NavigationRoadType.highway ? 75.0 : 25.0;
+      case ManeuverType.turn:
+      case ManeuverType.merge:
+        if (maneuver.modifier == ManeuverModifier.uTurn ||
+            maneuver.modifier == ManeuverModifier.sharpLeft ||
+            maneuver.modifier == ManeuverModifier.sharpRight) {
+          return roadType == NavigationRoadType.highway ? 50.0 : 20.0;
+        }
+        return 0.0;
+      default:
+        return 0.0;
+    }
   }
 
   void dispose() {

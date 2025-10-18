@@ -49,4 +49,15 @@ export 'ui/navigation_view/mapbox_map_controller.dart';
 export 'navigation_controller.dart';
 
 export 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
-    show MapboxOptions;
+    show
+        MapboxOptions,
+        MapWidget,
+        MapboxMap,
+        LocationPuck,
+        LocationPuck2D,
+        LocationPuck3D,
+        DefaultLocationPuck2D,
+        LocationComponentSettings,
+        CameraOptions,
+        Position,
+        Point;

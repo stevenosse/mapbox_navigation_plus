@@ -955,6 +955,7 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   /// Draws multiple routes on the map with different colors
+  @override
   Future<void> drawMultipleRoutes({
     required List<RouteModel> routes,
     List<Color>? colors,
@@ -967,13 +968,15 @@ class MapboxMapController implements MapControllerInterface {
       await clearMultipleRoutes();
 
       // Use provided colors or generate default ones
-      final routeColors = colors ?? [
-        const Color(0xFF3366CC), // Blue
-        const Color(0xFF00AA00), // Green
-        const Color(0xFFFF6600), // Orange
-        const Color(0xFFCC00CC), // Purple
-        const Color(0xFF00CCCC), // Cyan
-      ];
+      final routeColors =
+          colors ??
+          [
+            const Color(0xFF3366CC), // Blue
+            const Color(0xFF00AA00), // Green
+            const Color(0xFFFF6600), // Orange
+            const Color(0xFFCC00CC), // Purple
+            const Color(0xFF00CCCC), // Cyan
+          ];
 
       final baseConfig = baseStyleConfig ?? RouteStyleConfig.defaultConfig;
 
@@ -998,17 +1001,11 @@ class MapboxMapController implements MapControllerInterface {
 
         // Add source for this route
         await _mapboxMap.style.addSource(
-          mb.GeoJsonSource(
-            id: sourceId,
-            data: routeGeoJson,
-          ),
+          mb.GeoJsonSource(id: sourceId, data: routeGeoJson),
         );
 
         // Create and add layer for this route
-        final routeLayer = mb.LineLayer(
-          id: layerId,
-          sourceId: sourceId,
-        );
+        final routeLayer = mb.LineLayer(id: layerId, sourceId: sourceId);
 
         try {
           await _mapboxMap.style.addLayerAt(
@@ -1024,7 +1021,7 @@ class MapboxMapController implements MapControllerInterface {
         await _mapboxMap.style.setStyleLayerProperty(
           layerId,
           'line-color',
-          '#${(color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+          '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
         );
         await _mapboxMap.style.setStyleLayerProperty(
           layerId,

@@ -16,8 +16,6 @@ import 'core/models/route_style_config.dart';
 import 'core/models/routing_options.dart';
 import 'core/models/location_puck_config.dart';
 import 'core/models/destination_pin_config.dart';
-import 'services/routing/mapbox_routing_engine.dart';
-import 'ui/navigation_view/mapbox_map_controller.dart';
 
 /// Main navigation controller that orchestrates all navigation components
 class NavigationController implements NavController {
@@ -130,23 +128,6 @@ class NavigationController implements NavController {
   /// Hides the destination pin
   Future<void> hideDestinationPin() async {
     await mapController.hideDestinationPin();
-  }
-
-  /// Factory constructor for creating a NavigationController with default implementations
-  factory NavigationController.mapbox({
-    required String mapboxAccessToken,
-    required LocationProvider locationProvider,
-    required RouteProgressTracker progressTracker,
-    required VoiceGuidance voiceGuidance,
-    required MapboxMapController mapController,
-  }) {
-    return NavigationController(
-      routingEngine: MapboxRoutingEngine(accessToken: mapboxAccessToken),
-      locationProvider: locationProvider,
-      progressTracker: progressTracker,
-      voiceGuidance: voiceGuidance,
-      mapController: mapController,
-    );
   }
 
   // Stream getters
