@@ -166,6 +166,12 @@ class NavigationController implements NavController {
   @override
   double? get remainingDuration => _currentProgress?.durationRemaining;
 
+  /// Checks if navigation is currently active (navigating, paused, or deviated)
+  bool get isNavigationActive =>
+      _currentState == NavigationState.navigating ||
+      _currentState == NavigationState.paused ||
+      _currentState == NavigationState.deviated;
+
   /// Initialize location updates to get current position before navigation starts
   @override
   Future<void> initializeLocation() async {

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'mapbox_map_controller.dart';
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/location_point.dart';
 import '../../core/models/route_progress.dart';
+import '../../core/models/navigation_state.dart';
+import '../../navigation_controller.dart';
 
 class NavigationView extends StatefulWidget {
   final MapControllerInterface? controller;
+  final NavigationController? navigationController;
   final String mapboxAccessToken;
   final String? styleUrl;
   final LocationPoint? initialCenter;
@@ -19,6 +23,7 @@ class NavigationView extends StatefulWidget {
   const NavigationView({
     super.key,
     this.controller,
+    this.navigationController,
     required this.mapboxAccessToken,
     this.styleUrl,
     this.initialCenter,
@@ -35,6 +40,42 @@ class NavigationView extends StatefulWidget {
 
 class _NavigationViewState extends State<NavigationView> {
   MapboxMapController? _mapController;
+  StreamSubscription<NavigationState>? _stateSubscription;
+  bool _isNavigationActive = false;
+
+  bool get isNavigationActive => _isNavigationActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupNavigationStateListener();
+  }
+
+  @override
+  void didUpdateWidget(NavigationView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigationController != widget.navigationController) {
+      _stateSubscription?.cancel();
+      _setupNavigationStateListener();
+    }
+  }
+
+  void _setupNavigationStateListener() {
+    if (widget.navigationController != null) {
+      _isNavigationActive = widget.navigationController!.isNavigationActive;
+
+      _stateSubscription = widget.navigationController!.stateStream.listen((
+        state,
+      ) {
+        if (mounted) {
+          setState(() {
+            _isNavigationActive =
+                widget.navigationController!.isNavigationActive;
+          });
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,9 +100,9 @@ class _NavigationViewState extends State<NavigationView> {
             widget.onMapCreated?.call(_mapController!);
           },
           viewport: mb.FollowPuckViewportState(
-            zoom: 18.5,
+            zoom: isNavigationActive ? 20 : 18.5,
             bearing: mb.FollowPuckViewportStateBearingHeading(),
-            pitch: 45.0,
+            pitch: isNavigationActive ? 70.0 : 0.0,
           ),
           onStyleLoadedListener: (data) async {
             await _setupLocationPuck();
@@ -110,6 +151,7 @@ class _NavigationViewState extends State<NavigationView> {
 
   @override
   void dispose() {
+    _stateSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
