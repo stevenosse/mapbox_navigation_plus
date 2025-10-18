@@ -104,12 +104,19 @@ abstract class NavigationEventListener {
 /// Navigation result
 class NavigationResult {
   final bool success;
+  final RouteModel? route;
   final NavigationError? error;
   final String? message;
 
-  const NavigationResult({required this.success, this.error, this.message});
+  const NavigationResult({
+    required this.success,
+    this.route,
+    this.error,
+    this.message,
+  });
 
-  factory NavigationResult.success() => const NavigationResult(success: true);
+  factory NavigationResult.success(RouteModel route) =>
+      NavigationResult(success: true, route: route);
 
   factory NavigationResult.failure(NavigationError error, [String? message]) =>
       NavigationResult(success: false, error: error, message: message);

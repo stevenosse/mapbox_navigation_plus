@@ -172,7 +172,6 @@ class _NavigationDemoState extends State<NavigationDemo>
                 _currentLocation ??
                 _destination, // Use current location or fallback to destination
             initialZoom: 17.0,
-            routeProgress: _currentProgress,
             navigationController: _navigationController,
             onMapCreated: (controller) async {
               _mapController = controller;

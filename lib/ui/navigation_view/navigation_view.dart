@@ -4,8 +4,8 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'mapbox_map_controller.dart';
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/location_point.dart';
-import '../../core/models/route_progress.dart';
 import '../../core/models/navigation_state.dart';
+import '../../core/models/route_model.dart';
 import '../../navigation_controller.dart';
 
 class NavigationView extends StatefulWidget {
@@ -16,7 +16,7 @@ class NavigationView extends StatefulWidget {
   final LocationPoint? initialCenter;
   final double initialZoom;
   final bool enableLocation;
-  final RouteProgress? routeProgress;
+  final RouteModel? routePreview;
   final void Function(MapboxMapController)? onMapCreated;
   final VoidCallback? onFollowingLocationStopped;
 
@@ -29,7 +29,7 @@ class NavigationView extends StatefulWidget {
     this.initialCenter,
     this.initialZoom = 16.0,
     this.enableLocation = true,
-    this.routeProgress,
+    this.routePreview,
     this.onMapCreated,
     this.onFollowingLocationStopped,
   });
@@ -58,6 +58,9 @@ class _NavigationViewState extends State<NavigationView> {
       _stateSubscription?.cancel();
       _setupNavigationStateListener();
     }
+    if (oldWidget.routePreview != widget.routePreview) {
+      _handleRoutePreview();
+    }
   }
 
   void _setupNavigationStateListener() {
@@ -74,6 +77,20 @@ class _NavigationViewState extends State<NavigationView> {
           });
         }
       });
+    }
+  }
+
+  Future<void> _handleRoutePreview() async {
+    if (_mapController == null) return;
+
+    try {
+      if (widget.routePreview != null) {
+        await _mapController!.drawRoute(route: widget.routePreview!);
+      } else {
+        await _mapController!.clearRoute();
+      }
+    } catch (e) {
+      debugPrint('Error handling route preview: $e');
     }
   }
 
@@ -99,14 +116,22 @@ class _NavigationViewState extends State<NavigationView> {
             _mapController = MapboxMapController(mapboxMap);
             widget.onMapCreated?.call(_mapController!);
           },
-          viewport: mb.FollowPuckViewportState(
-            zoom: isNavigationActive ? 20 : 18.5,
-            bearing: mb.FollowPuckViewportStateBearingHeading(),
-            pitch: isNavigationActive ? 70.0 : 0.0,
-          ),
+          viewport: _mapController?.isFollowingLocation == true
+              ? widget.routePreview != null
+                    ? mb.OverviewViewportState(
+                        geometry: widget.routePreview!
+                            .calculateRouteGeometryBounds(),
+                      )
+                    : mb.FollowPuckViewportState(
+                        zoom: isNavigationActive ? 20 : 18.5,
+                        bearing: mb.FollowPuckViewportStateBearingHeading(),
+                        pitch: isNavigationActive ? 70.0 : 0.0,
+                      )
+              : null,
           onStyleLoadedListener: (data) async {
             await _setupLocationPuck();
             await _setupCustomMarkers();
+            await _handleRoutePreview();
           },
           onScrollListener: (scrollEvent) {
             _mapController?.setFollowingLocation(false);
@@ -127,12 +152,9 @@ class _NavigationViewState extends State<NavigationView> {
 
     try {
       final mapboxMap = _mapController!.mapboxMap;
-
-      // Create point annotation manager
       final pointAnnotationManager = await mapboxMap.annotations
           .createPointAnnotationManager();
 
-      // Store the annotation manager for later use
       _mapController!.pointAnnotationManager = pointAnnotationManager;
     } catch (e) {
       debugPrint('Error setting up custom markers: $e');

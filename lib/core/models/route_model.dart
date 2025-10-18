@@ -275,6 +275,47 @@ class RouteModel {
     );
   }
 
+  mb.GeometryObject calculateRouteGeometryBounds() {
+    if (geometry.isEmpty) {
+      return mb.Point(coordinates: mb.Position(0, 0));
+    }
+
+    // Calculate route bounds
+    double minLat = geometry.first.latitude;
+    double maxLat = geometry.first.latitude;
+    double minLon = geometry.first.longitude;
+    double maxLon = geometry.first.longitude;
+
+    for (final point in geometry) {
+      minLat = math.min(minLat, point.latitude);
+      maxLat = math.max(maxLat, point.latitude);
+      minLon = math.min(minLon, point.longitude);
+      maxLon = math.max(maxLon, point.longitude);
+    }
+
+    // Add padding to bounds (10% of the route extent)
+    final latPadding = (maxLat - minLat) * 0.1;
+    final lonPadding = (maxLon - minLon) * 0.1;
+
+    minLat -= latPadding;
+    maxLat += latPadding;
+    minLon -= lonPadding;
+    maxLon += lonPadding;
+
+    // Create a bounding box polygon
+    return mb.Polygon(
+      coordinates: [
+        [
+          mb.Position(minLon, minLat), // southwest
+          mb.Position(maxLon, minLat), // southeast
+          mb.Position(maxLon, maxLat), // northeast
+          mb.Position(minLon, maxLat), // northwest
+          mb.Position(minLon, minLat), // close the polygon
+        ],
+      ],
+    );
+  }
+
   @override
   String toString() {
     return 'Route(id: $id, distance: ${distance.toStringAsFixed(0)}m, duration: ${(duration / 60).toStringAsFixed(1)}min, legs: ${legs.length})';

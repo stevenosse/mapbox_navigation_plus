@@ -283,7 +283,7 @@ class NavigationController implements NavController {
         followLocation: true,
       );
 
-      return NavigationResult.success();
+      return NavigationResult.success(route);
     } catch (e) {
       final error = NavigationError(
         type: NavigationErrorType.configurationError,
@@ -387,6 +387,7 @@ class NavigationController implements NavController {
     if (_currentProgress != null) {
       await mapController.centerOnLocation(
         location: _currentProgress!.currentLocation,
+        zoom: 20,
         followLocation: true,
       );
     }
