@@ -1,11 +1,10 @@
+import 'package:example/config.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_navigation_plus/mapbox_navigation_plus.dart';
 
 /// Example demonstrating multiple route selection functionality
 class MultipleRoutesExample extends StatefulWidget {
-  final String mapboxAccessToken;
-
-  const MultipleRoutesExample({super.key, required this.mapboxAccessToken});
+  const MultipleRoutesExample({super.key});
 
   @override
   State<MultipleRoutesExample> createState() => _MultipleRoutesExampleState();
@@ -13,9 +12,8 @@ class MultipleRoutesExample extends StatefulWidget {
 
 class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
   NavigationController? _navigationController;
-  MapboxMapController? _mapController;
   late final RoutingEngine _routingEngine = MapboxRoutingEngine(
-    accessToken: widget.mapboxAccessToken,
+    accessToken: Config.instance.mapboxAccessToken,
   );
 
   // Route selection state
@@ -42,9 +40,15 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
         children: [
           // Navigation map
           NavigationView(
-            mapboxAccessToken: widget.mapboxAccessToken,
+            mapboxAccessToken: Config.instance.mapboxAccessToken,
             initialCenter: _origin,
             initialZoom: 12.0,
+            routePreview: _routes.isEmpty ? null : _selectedRoute,
+            navigationController: _navigationController,
+            alternativeRoutes: _routes.isEmpty
+                ? null
+                : _routes.where((r) => r.id != _selectedRoute?.id).toList(),
+            highlightedRouteId: _selectedRoute?.id,
             onMapCreated: _initializeNavigation,
           ),
 
@@ -174,8 +178,6 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
   }
 
   Future<void> _initializeNavigation(MapboxMapController controller) async {
-    _mapController = controller;
-
     // Initialize navigation controller
     _navigationController = NavigationController(
       routingEngine: _routingEngine,
@@ -186,10 +188,12 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
     );
 
     await _navigationController!.initializeLocation();
+
+    setState(() {});
   }
 
   Future<void> _requestMultipleRoutes() async {
-    if (_navigationController == null || _mapController == null) return;
+    if (_navigationController == null) return;
 
     setState(() {
       _isLoadingRoutes = true;
@@ -199,9 +203,6 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
     });
 
     try {
-      // Clear any existing routes from the map
-      await _mapController!.clearRoute();
-
       // Request multiple alternative routes
       final routes = await _routingEngine.getAlternativeRoutes(
         origin: _origin,
@@ -214,9 +215,6 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
           _routes = routes;
           _selectedRoute = routes.first; // Select first route by default
         });
-
-        // Display all routes on the map with different styles
-        await _displayRoutesOnMap();
       } else {
         setState(() {
           _errorMessage = 'No routes found. Please try different locations.';
@@ -233,63 +231,11 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
     }
   }
 
-  /// Displays all routes on the map with different colors
-  Future<void> _displayRoutesOnMap() async {
-    if (_mapController == null || _routes.isEmpty) return;
-
-    // Clear existing routes first
-    await _mapController!.clearRoute();
-
-    // Define different colors for each route
-    final routeColors = [
-      const Color(0xFF3366CC), // Blue
-      const Color(0xFF00AA00), // Green
-      const Color(0xFFFF6600), // Orange
-      const Color(0xFFCC00CC), // Purple
-      const Color(0xFF00CCCC), // Cyan
-    ];
-
-    try {
-      // Use the new drawMultipleRoutes method
-      await _mapController!.drawMultipleRoutes(
-        routes: _routes,
-        colors: routeColors,
-      );
-
-      // Highlight the selected route if any, otherwise highlight the first one
-      final routeToHighlight = _selectedRoute ?? _routes.first;
-      await _mapController!.highlightRoute(routeToHighlight.id);
-    } catch (e) {
-      // Fallback: draw just the selected route
-      final routeToDraw = _selectedRoute ?? _routes.first;
-      await _mapController!.drawRoute(route: routeToDraw);
-    }
-  }
-
   /// Handles route selection from UI
   Future<void> _selectRoute(RouteModel route) async {
-    if (_mapController == null) return;
-
     setState(() {
       _selectedRoute = route;
     });
-
-    try {
-      await _mapController!.highlightRoute(route.id);
-    } catch (e) {
-      await _displayRoutesOnMap();
-    }
-
-    if (route.geometry.isNotEmpty) {
-      await _mapController!.moveCamera(
-        center: route.geometry[route.geometry.length ~/ 2],
-        zoom: 8.0,
-        animation: const CameraAnimation(
-          duration: Duration(seconds: 1),
-          type: AnimationType.easeInOut,
-        ),
-      );
-    }
   }
 
   /// Starts navigation with the selected route
@@ -297,10 +243,14 @@ class _MultipleRoutesExampleState extends State<MultipleRoutesExample> {
     if (_selectedRoute == null || _navigationController == null) return;
 
     try {
-      // Start navigation with the selected route
       await _navigationController!.startNavigationWithRoute(
         route: _selectedRoute!,
       );
+
+      setState(() {
+        _routes = [];
+        _selectedRoute = null;
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to start navigation: ${e.toString()}';

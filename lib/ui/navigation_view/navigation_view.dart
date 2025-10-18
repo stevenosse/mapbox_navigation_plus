@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'mapbox_map_controller.dart';
 import '../../core/interfaces/map_controller_interface.dart';
@@ -17,6 +18,8 @@ class NavigationView extends StatefulWidget {
   final double initialZoom;
   final bool enableLocation;
   final RouteModel? routePreview;
+  final List<RouteModel>? alternativeRoutes;
+  final String? highlightedRouteId;
   final void Function(MapboxMapController)? onMapCreated;
   final VoidCallback? onFollowingLocationStopped;
 
@@ -30,6 +33,8 @@ class NavigationView extends StatefulWidget {
     this.initialZoom = 16.0,
     this.enableLocation = true,
     this.routePreview,
+    this.alternativeRoutes,
+    this.highlightedRouteId,
     this.onMapCreated,
     this.onFollowingLocationStopped,
   });
@@ -58,8 +63,12 @@ class _NavigationViewState extends State<NavigationView> {
       _stateSubscription?.cancel();
       _setupNavigationStateListener();
     }
-    if (oldWidget.routePreview != widget.routePreview) {
+    if (oldWidget.routePreview != widget.routePreview ||
+        oldWidget.alternativeRoutes != widget.alternativeRoutes) {
       _handleRoutePreview();
+    }
+    if (oldWidget.highlightedRouteId != widget.highlightedRouteId) {
+      _handleRouteHighlighting();
     }
   }
 
@@ -84,14 +93,97 @@ class _NavigationViewState extends State<NavigationView> {
     if (_mapController == null) return;
 
     try {
+      await _mapController!.clearRoute();
+      await _mapController!.clearMultipleRoutes();
+
+      final List<RouteModel> allRoutes = [];
+
       if (widget.routePreview != null) {
-        await _mapController!.drawRoute(route: widget.routePreview!);
-      } else {
-        await _mapController!.clearRoute();
+        allRoutes.add(widget.routePreview!);
+      }
+
+      if (widget.alternativeRoutes != null) {
+        allRoutes.addAll(widget.alternativeRoutes!);
+      }
+
+      if (allRoutes.isNotEmpty) {
+        await _mapController!.drawMultipleRoutes(routes: allRoutes);
+        await _handleRouteHighlighting();
       }
     } catch (e) {
       debugPrint('Error handling route preview: $e');
     }
+  }
+
+  Future<void> _handleRouteHighlighting() async {
+    if (_mapController == null) return;
+
+    try {
+      if (widget.highlightedRouteId != null) {
+        await _mapController!.highlightRoute(widget.highlightedRouteId!);
+      } else if (widget.routePreview != null) {
+        await _mapController!.highlightRoute(widget.routePreview!.id);
+      }
+    } catch (e) {
+      debugPrint('Error handling route highlighting: $e');
+    }
+  }
+
+  mb.GeometryObject _calculateCombinedGeometryBounds() {
+    final List<RouteModel> allRoutes = [];
+
+    if (widget.routePreview != null) {
+      allRoutes.add(widget.routePreview!);
+    }
+
+    if (widget.alternativeRoutes != null &&
+        widget.alternativeRoutes!.isNotEmpty) {
+      allRoutes.addAll(widget.alternativeRoutes!);
+    }
+
+    if (allRoutes.isEmpty) {
+      return mb.Point(coordinates: mb.Position(0, 0));
+    }
+
+    final firstGeometry = allRoutes.first.geometry;
+    if (firstGeometry.isEmpty) {
+      return mb.Point(coordinates: mb.Position(0, 0));
+    }
+
+    double minLat = firstGeometry.first.latitude;
+    double maxLat = firstGeometry.first.latitude;
+    double minLon = firstGeometry.first.longitude;
+    double maxLon = firstGeometry.first.longitude;
+
+    for (final route in allRoutes) {
+      for (final point in route.geometry) {
+        minLat = math.min(minLat, point.latitude);
+        maxLat = math.max(maxLat, point.latitude);
+        minLon = math.min(minLon, point.longitude);
+        maxLon = math.max(maxLon, point.longitude);
+      }
+    }
+
+    // Add padding to bounds (15% of the route extent for multiple routes)
+    final latPadding = (maxLat - minLat) * 0.15;
+    final lonPadding = (maxLon - minLon) * 0.15;
+
+    minLat -= latPadding;
+    maxLat += latPadding;
+    minLon -= lonPadding;
+    maxLon += lonPadding;
+
+    return mb.Polygon(
+      coordinates: [
+        [
+          mb.Position(minLon, minLat), // southwest
+          mb.Position(maxLon, minLat), // southeast
+          mb.Position(maxLon, maxLat), // northeast
+          mb.Position(minLon, maxLat), // northwest
+          mb.Position(minLon, minLat), // close the polygon
+        ],
+      ],
+    );
   }
 
   @override
@@ -116,18 +208,27 @@ class _NavigationViewState extends State<NavigationView> {
             _mapController = MapboxMapController(mapboxMap);
             widget.onMapCreated?.call(_mapController!);
           },
-          viewport: _mapController?.isFollowingLocation == true
-              ? widget.routePreview != null
-                    ? mb.OverviewViewportState(
-                        geometry: widget.routePreview!
-                            .calculateRouteGeometryBounds(),
-                      )
-                    : mb.FollowPuckViewportState(
-                        zoom: isNavigationActive ? 20 : 18.5,
-                        bearing: mb.FollowPuckViewportStateBearingHeading(),
-                        pitch: isNavigationActive ? 70.0 : 0.0,
-                      )
-              : null,
+          viewport: () {
+            final shouldShowOverViewVP =
+                (widget.routePreview != null ||
+                widget.alternativeRoutes != null &&
+                    widget.alternativeRoutes!.isNotEmpty);
+            final isFollowingLocation =
+                _mapController?.isFollowingLocation == true;
+
+            if (!isFollowingLocation) {
+              return null;
+            }
+            return shouldShowOverViewVP
+                ? mb.OverviewViewportState(
+                    geometry: _calculateCombinedGeometryBounds(),
+                  )
+                : mb.FollowPuckViewportState(
+                    zoom: isNavigationActive ? 20 : 18.5,
+                    bearing: mb.FollowPuckViewportStateBearingHeading(),
+                    pitch: isNavigationActive ? 70.0 : 0.0,
+                  );
+          }(),
           onStyleLoadedListener: (data) async {
             await _setupLocationPuck();
             await _setupCustomMarkers();
