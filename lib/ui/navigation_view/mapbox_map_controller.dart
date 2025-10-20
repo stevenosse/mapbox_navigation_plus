@@ -65,7 +65,6 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   Future<void> _createDataSources() async {
-    // Create route line source
     await _mapboxMap.style.addSource(
       mb.GeoJsonSource(
         id: _routeSourceId,
@@ -73,7 +72,6 @@ class MapboxMapController implements MapControllerInterface {
       ),
     );
 
-    // Create progress line source
     await _mapboxMap.style.addSource(
       mb.GeoJsonSource(
         id: _progressSourceId,
@@ -81,7 +79,6 @@ class MapboxMapController implements MapControllerInterface {
       ),
     );
 
-    // Create traveled line source
     await _mapboxMap.style.addSource(
       mb.GeoJsonSource(
         id: _traveledSourceId,
@@ -89,7 +86,6 @@ class MapboxMapController implements MapControllerInterface {
       ),
     );
 
-    // Create marker source
     await _mapboxMap.style.addSource(
       mb.GeoJsonSource(
         id: _markerSourceId,
@@ -97,14 +93,12 @@ class MapboxMapController implements MapControllerInterface {
       ),
     );
 
-    // Create marker layer
     final markerLayer = mb.SymbolLayer(
       id: 'marker_layer',
       sourceId: _markerSourceId,
     );
     await _mapboxMap.style.addLayer(markerLayer);
 
-    // Set marker layer properties
     await _mapboxMap.style.setStyleLayerProperty('marker_layer', 'icon-image', [
       'get',
       'icon',
@@ -125,7 +119,6 @@ class MapboxMapController implements MapControllerInterface {
       true,
     );
 
-    // Create location puck source
     await _mapboxMap.style.addSource(
       mb.GeoJsonSource(
         id: _locationPuckSourceId,
@@ -135,7 +128,6 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   Future<void> _createLayers() async {
-    // Create route layer
     final routeLayer = mb.LineLayer(
       id: _routeLayerId,
       sourceId: _routeSourceId,
@@ -146,11 +138,9 @@ class MapboxMapController implements MapControllerInterface {
         mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
       );
     } catch (e) {
-      // Fallback: if location layer doesn't exist yet, add normally and it will be below when location is enabled
       await _mapboxMap.style.addLayer(routeLayer);
     }
 
-    // Set route layer properties
     await _mapboxMap.style.setStyleLayerProperty(
       _routeLayerId,
       'line-color',
@@ -167,7 +157,6 @@ class MapboxMapController implements MapControllerInterface {
       0.8,
     );
 
-    // Create progress layer (remaining route)
     final progressLayer = mb.LineLayer(
       id: _progressLayerId,
       sourceId: _progressSourceId,
@@ -182,7 +171,6 @@ class MapboxMapController implements MapControllerInterface {
       await _mapboxMap.style.addLayer(progressLayer);
     }
 
-    // Set progress layer properties
     await _mapboxMap.style.setStyleLayerProperty(
       _progressLayerId,
       'line-color',
@@ -199,7 +187,6 @@ class MapboxMapController implements MapControllerInterface {
       1.0,
     );
 
-    // Create traveled route layer
     final traveledLayer = mb.LineLayer(
       id: _traveledLayerId,
       sourceId: _traveledSourceId,
@@ -214,7 +201,6 @@ class MapboxMapController implements MapControllerInterface {
       await _mapboxMap.style.addLayer(traveledLayer);
     }
 
-    // Set traveled layer properties
     await _mapboxMap.style.setStyleLayerProperty(
       _traveledLayerId,
       'line-color',
@@ -238,27 +224,22 @@ class MapboxMapController implements MapControllerInterface {
     RouteStyleConfig? styleConfig,
   }) async {
     try {
-      // Use provided style config or default
       final config = styleConfig ?? RouteStyleConfig.defaultConfig;
       final routeStyle = config.routeLineStyle;
 
-      // Convert route geometry to coordinates
       final coordinates = route.geometry
           .map((point) => '[${point.longitude},${point.latitude}]')
           .join(',');
 
-      // Create GeoJSON string for the route
       final routeGeoJson =
           '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coordinates]},"properties":{}}';
 
-      // Update route source
       await _mapboxMap.style.getSource(_routeSourceId).then((source) async {
         if (source is mb.GeoJsonSource) {
           await source.updateGeoJSON(routeGeoJson);
         }
       });
 
-      // Update route layer styling using the new configuration
       await _mapboxMap.style.setStyleLayerProperty(
         _routeLayerId,
         'line-color',
@@ -285,13 +266,11 @@ class MapboxMapController implements MapControllerInterface {
         routeStyle.joinStyle.value,
       );
 
-      // Add markers for origin and destination
       final markers = <MapMarker>[
         MapMarker.origin(position: route.origin),
         MapMarker.destination(position: route.destination),
       ];
 
-      // Add waypoint markers if any
       for (int i = 0; i < route.waypoints.length; i++) {
         markers.add(
           MapMarker.waypoint(position: route.waypoints[i], index: i + 1),
@@ -310,7 +289,6 @@ class MapboxMapController implements MapControllerInterface {
     RouteStyleConfig? styleConfig,
   }) async {
     try {
-      // Use provided style config or default
       final config = styleConfig ?? RouteStyleConfig.defaultConfig;
       final traveledStyle = config.traveledLineStyle;
       final remainingStyle = config.remainingLineStyle;
@@ -320,24 +298,20 @@ class MapboxMapController implements MapControllerInterface {
 
       if (geometry.isEmpty) return;
 
-      // Calculate how much of the route has been traveled
       final traveledIndices = _getTraveledGeometryIndices(
         geometry,
         progress.distanceTraveled,
         route.distance,
       );
 
-      // Create traveled route geometry
       final traveledGeometry = traveledIndices.isEmpty
           ? <LocationPoint>[]
           : geometry.sublist(0, traveledIndices.last + 1);
 
-      // Create remaining route geometry
       final remainingGeometry = traveledIndices.isEmpty
           ? geometry
           : geometry.sublist(traveledIndices.last);
 
-      // Update traveled route
       if (traveledGeometry.isNotEmpty) {
         final traveledLineString = mb.LineString(
           coordinates: traveledGeometry
@@ -366,7 +340,6 @@ class MapboxMapController implements MapControllerInterface {
           }
         });
 
-        // Update traveled layer styling
         await _mapboxMap.style.setStyleLayerProperty(
           _traveledLayerId,
           'line-color',
@@ -394,7 +367,6 @@ class MapboxMapController implements MapControllerInterface {
         );
       }
 
-      // Update remaining route
       if (remainingGeometry.isNotEmpty) {
         final remainingLineString = mb.LineString(
           coordinates: remainingGeometry
@@ -423,7 +395,6 @@ class MapboxMapController implements MapControllerInterface {
           }
         });
 
-        // Update remaining layer styling
         await _mapboxMap.style.setStyleLayerProperty(
           _progressLayerId,
           'line-color',
@@ -458,13 +429,11 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> addMarkers(List<MapMarker> markers) async {
     try {
-      // Use AnnotationManager for destination markers with custom icons
       if (pointAnnotationManager != null) {
         final pointAnnotations = <mb.PointAnnotationOptions>[];
 
         for (final marker in markers) {
           if (marker.type == MarkerType.destination) {
-            // Load custom image for this marker
             final flagBytes = await rootBundle.load(kDefaultArrivalMarker);
 
             pointAnnotations.add(
@@ -491,7 +460,6 @@ class MapboxMapController implements MapControllerInterface {
           .map((marker) {
             String iconImage = marker.iconImage ?? marker.defaultIconImage;
 
-            // Skip destination markers as they're handled by AnnotationManager
             if (marker.type == MarkerType.destination) {
               return null;
             }
@@ -611,7 +579,6 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> clearRoute() async {
     try {
-      // Clear route sources
       await _mapboxMap.style.getSource(_routeSourceId).then((source) async {
         if (source is mb.GeoJsonSource) {
           await source.updateGeoJSON(
@@ -695,7 +662,6 @@ class MapboxMapController implements MapControllerInterface {
       _currentLocation = location;
       _lastLocation = _lastLocation ?? location;
 
-      // Calculate smooth heading if not provided
       double heading = location.heading ?? 0.0;
       if (heading == 0.0 && _lastLocation != null) {
         heading = _calculateHeading(_lastLocation!, location);
@@ -759,7 +725,6 @@ class MapboxMapController implements MapControllerInterface {
         puckBearingEnabled: true,
       );
 
-      // Apply the new settings
       await mapboxMap.location.updateSettings(locationSettings);
     } catch (e) {
       throw Exception('Failed to set idle location puck: $e');
@@ -799,9 +764,9 @@ class MapboxMapController implements MapControllerInterface {
         pulsingEnabled: false,
         puckBearing: mb.PuckBearing.COURSE,
         puckBearingEnabled: true,
+        showAccuracyRing: true,
       );
 
-      // Apply the new settings
       await mapboxMap.location.updateSettings(locationSettings);
     } catch (e) {
       throw Exception('Failed to set navigation location puck: $e');
@@ -853,7 +818,7 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> configureLocationPuck(LocationPuckConfig config) async {
     _locationPuckConfig = config;
-    // Apply the configuration to the current location puck if it exists
+
     if (_currentLocation != null) {
       await updateLocationPuck(_currentLocation!);
     }
@@ -872,15 +837,12 @@ class MapboxMapController implements MapControllerInterface {
       final config =
           _destinationPinConfig ?? DestinationPinConfig.defaultConfig;
 
-      // Create destination pin annotation
       pointAnnotationManager ??= await _mapboxMap.annotations
           .createPointAnnotationManager();
 
-      // Create the point annotation
       mb.PointAnnotationOptions annotation;
 
       if (config.imagePath != null) {
-        // Load custom image
         final imageData = await rootBundle.load(config.imagePath!);
         final imageBytes = imageData.buffer.asUint8List();
 
@@ -891,7 +853,6 @@ class MapboxMapController implements MapControllerInterface {
           image: imageBytes,
         );
       } else {
-        // Use default pin without custom image
         annotation = mb.PointAnnotationOptions(
           geometry: mb.Point(
             coordinates: mb.Position(location.longitude, location.latitude),
@@ -925,28 +886,24 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> clearMultipleRoutes() async {
     try {
-      // Remove all multiple route layers and sources
       for (final entry in _multipleRouteIds.entries) {
         final routeId = entry.key;
         final layerId = entry.value;
         final sourceId = '${_routeSourceId}_multiple_$routeId';
 
         try {
-          // Remove layer
           await _mapboxMap.style.removeStyleLayer(layerId);
         } catch (e) {
           // Layer might not exist, continue
         }
 
         try {
-          // Remove source
           await _mapboxMap.style.removeStyleSource(sourceId);
         } catch (e) {
           // Source might not exist, continue
         }
       }
 
-      // Clear the tracking maps
       _multipleRouteIds.clear();
       _highlightedRouteId = null;
     } catch (e) {
@@ -964,10 +921,8 @@ class MapboxMapController implements MapControllerInterface {
     try {
       if (routes.isEmpty) return;
 
-      // Clear existing multiple routes first
       await clearMultipleRoutes();
 
-      // Use provided colors or generate default ones
       final routeColors =
           colors ??
           [
@@ -980,31 +935,24 @@ class MapboxMapController implements MapControllerInterface {
 
       final baseConfig = baseStyleConfig ?? RouteStyleConfig.defaultConfig;
 
-      // Create each route with its own layer and source
       for (int i = 0; i < routes.length; i++) {
         final route = routes[i];
         final routeId = route.id;
         final color = routeColors[i % routeColors.length];
 
-        // Create unique source and layer IDs for this route
         final sourceId = '${_routeSourceId}_multiple_$routeId';
         final layerId = '${_routeLayerId}_multiple_$routeId';
-
-        // Convert route geometry to coordinates
         final coordinates = route.geometry
             .map((point) => '[${point.longitude},${point.latitude}]')
             .join(',');
 
-        // Create GeoJSON string for the route
         final routeGeoJson =
             '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coordinates]},"properties":{"routeId":"$routeId"}}';
 
-        // Add source for this route
         await _mapboxMap.style.addSource(
           mb.GeoJsonSource(id: sourceId, data: routeGeoJson),
         );
 
-        // Create and add layer for this route
         final routeLayer = mb.LineLayer(id: layerId, sourceId: sourceId);
 
         try {
@@ -1013,11 +961,9 @@ class MapboxMapController implements MapControllerInterface {
             mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
           );
         } catch (e) {
-          // Fallback: add layer normally
           await _mapboxMap.style.addLayer(routeLayer);
         }
 
-        // Set route layer properties with custom color
         await _mapboxMap.style.setStyleLayerProperty(
           layerId,
           'line-color',
@@ -1031,7 +977,7 @@ class MapboxMapController implements MapControllerInterface {
         await _mapboxMap.style.setStyleLayerProperty(
           layerId,
           'line-opacity',
-          i == 0 ? 1.0 : 0.8, // First route (usually fastest) is more prominent
+          i == 0 ? 1.0 : 0.8,
         );
         await _mapboxMap.style.setStyleLayerProperty(
           layerId,
@@ -1044,11 +990,9 @@ class MapboxMapController implements MapControllerInterface {
           baseConfig.routeLineStyle.joinStyle.value,
         );
 
-        // Track this route for highlighting
         _multipleRouteIds[routeId] = layerId;
       }
 
-      // Add markers for origin and destination (only once)
       if (routes.isNotEmpty) {
         final firstRoute = routes.first;
         final markers = <MapMarker>[
@@ -1056,7 +1000,6 @@ class MapboxMapController implements MapControllerInterface {
           MapMarker.destination(position: firstRoute.destination),
         ];
 
-        // Add waypoint markers if any
         for (int i = 0; i < firstRoute.waypoints.length; i++) {
           markers.add(
             MapMarker.waypoint(position: firstRoute.waypoints[i], index: i + 1),
@@ -1080,14 +1023,12 @@ class MapboxMapController implements MapControllerInterface {
 
       final config = RouteStyleConfig.defaultConfig;
 
-      // Reset all routes to non-highlighted state
       for (final entry in _multipleRouteIds.entries) {
         final currentRouteId = entry.key;
         final layerId = entry.value;
 
         try {
           if (currentRouteId == routeId) {
-            // Highlight this route
             await _mapboxMap.style.setStyleLayerProperty(
               layerId,
               'line-color',
@@ -1104,7 +1045,6 @@ class MapboxMapController implements MapControllerInterface {
               1.0,
             );
           } else {
-            // Make other routes subdued
             await _mapboxMap.style.setStyleLayerProperty(
               layerId,
               'line-color',

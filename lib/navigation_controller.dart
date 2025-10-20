@@ -205,6 +205,7 @@ class NavigationController implements NavController {
     required LocationPoint destination,
     List<LocationPoint>? waypoints,
     RoutingOptions? options,
+    RouteStyleConfig? routeStyle,
   }) async {
     try {
       mapController.setFollowingLocation(true);
@@ -218,7 +219,10 @@ class NavigationController implements NavController {
         options: options,
       );
 
-      return await startNavigationWithRoute(route: route);
+      return await startNavigationWithRoute(
+        route: route,
+        routeStyle: routeStyle,
+      );
     } catch (e) {
       final error = NavigationError(
         type: NavigationErrorType.routingFailed,
@@ -236,6 +240,7 @@ class NavigationController implements NavController {
   @override
   Future<NavigationResult> startNavigationWithRoute({
     required RouteModel route,
+    RouteStyleConfig? routeStyle,
   }) async {
     try {
       _currentRoute = route;
@@ -247,7 +252,7 @@ class NavigationController implements NavController {
       // Draw route on map
       await mapController.drawRoute(
         route: route,
-        styleConfig: _routeStyleConfig,
+        styleConfig: routeStyle ?? _routeStyleConfig,
       );
 
       await showDestinationPin(route.destination);

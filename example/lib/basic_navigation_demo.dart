@@ -145,6 +145,8 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
                 _destination, // Use current location or fallback to destination
             initialZoom: 17.0,
             navigationController: _navigationController,
+            pitch: 75,
+            zoom: 21,
             onMapCreated: (controller) async {
               _mapController = controller;
               await _initializeNavigation();

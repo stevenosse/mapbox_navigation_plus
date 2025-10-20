@@ -20,6 +20,8 @@ class NavigationView extends StatefulWidget {
   final RouteModel? routePreview;
   final List<RouteModel>? alternativeRoutes;
   final String? highlightedRouteId;
+  final double? pitch;
+  final double? zoom;
   final void Function(MapboxMapController)? onMapCreated;
   final VoidCallback? onFollowingLocationStopped;
 
@@ -35,6 +37,8 @@ class NavigationView extends StatefulWidget {
     this.routePreview,
     this.alternativeRoutes,
     this.highlightedRouteId,
+    this.pitch,
+    this.zoom,
     this.onMapCreated,
     this.onFollowingLocationStopped,
   });
@@ -224,9 +228,9 @@ class _NavigationViewState extends State<NavigationView> {
                     geometry: _calculateCombinedGeometryBounds(),
                   )
                 : mb.FollowPuckViewportState(
-                    zoom: isNavigationActive ? 20 : 18.5,
+                    zoom: isNavigationActive ? (widget.zoom ?? 20) : 18.5,
                     bearing: mb.FollowPuckViewportStateBearingHeading(),
-                    pitch: isNavigationActive ? 70.0 : 0.0,
+                    pitch: isNavigationActive ? (widget.pitch ?? 70.0) : 0.0,
                   );
           }(),
           onStyleLoadedListener: (data) async {

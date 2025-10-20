@@ -27,3 +27,4 @@ flutter:
     - assets/car_marker_bg.png
     - assets/default-location-puck.png
     - assets/navigation-location-puck.png
+    - assets/car_arrow.glb
