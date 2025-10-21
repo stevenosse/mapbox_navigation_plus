@@ -105,6 +105,18 @@ abstract class MapControllerInterface {
 
   /// Hides the destination pin
   Future<void> hideDestinationPin();
+
+  /// Zooms in the map by one level
+  Future<void> zoomIn();
+
+  /// Zooms out the map by one level
+  Future<void> zoomOut();
+
+  /// Sets the map to a specific zoom level
+  Future<void> setZoom(double zoom, {CameraAnimation? animation});
+
+  /// Gets the current zoom level
+  Future<double> getCurrentZoom();
 }
 
 /// Camera position information

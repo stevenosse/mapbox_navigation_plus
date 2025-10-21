@@ -1074,6 +1074,80 @@ class MapboxMapController implements MapControllerInterface {
 
   @override
   void setFollowingLocation(bool follow) {
+    final wasFollowing = _isFollowingLocation;
     _isFollowingLocation = follow;
+
+    // If we're enabling following mode and have a current location, refresh the view
+    if (follow && !wasFollowing && _currentLocation != null) {
+      centerOnLocation(location: _currentLocation!, followLocation: true);
+    }
+  }
+
+  @override
+  Future<void> zoomIn() async {
+    try {
+      final currentCamera = await _mapboxMap.getCameraState();
+      final newZoom = (currentCamera.zoom + 1.0).clamp(1.0, 22.0);
+
+      await _mapboxMap.flyTo(
+        mb.CameraOptions(
+          zoom: newZoom,
+        ),
+        mb.MapAnimationOptions(duration: 300),
+      );
+    } catch (e) {
+      throw Exception('Failed to zoom in: $e');
+    }
+  }
+
+  @override
+  Future<void> zoomOut() async {
+    try {
+      final currentCamera = await _mapboxMap.getCameraState();
+      final newZoom = (currentCamera.zoom - 1.0).clamp(1.0, 22.0);
+
+      await _mapboxMap.flyTo(
+        mb.CameraOptions(
+          zoom: newZoom,
+        ),
+        mb.MapAnimationOptions(duration: 300),
+      );
+    } catch (e) {
+      throw Exception('Failed to zoom out: $e');
+    }
+  }
+
+  @override
+  Future<void> setZoom(double zoom, {CameraAnimation? animation}) async {
+    try {
+      final clampedZoom = zoom.clamp(1.0, 22.0);
+
+      if (animation != null) {
+        await _mapboxMap.flyTo(
+          mb.CameraOptions(
+            zoom: clampedZoom,
+          ),
+          mb.MapAnimationOptions(duration: animation.duration.inMilliseconds),
+        );
+      } else {
+        await _mapboxMap.setCamera(
+          mb.CameraOptions(
+            zoom: clampedZoom,
+          ),
+        );
+      }
+    } catch (e) {
+      throw Exception('Failed to set zoom: $e');
+    }
+  }
+
+  @override
+  Future<double> getCurrentZoom() async {
+    try {
+      final camera = await _mapboxMap.getCameraState();
+      return camera.zoom;
+    } catch (e) {
+      throw Exception('Failed to get current zoom: $e');
+    }
   }
 }
