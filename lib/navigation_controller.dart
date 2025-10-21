@@ -19,6 +19,8 @@ import 'core/models/destination_pin_config.dart';
 
 /// Main navigation controller that orchestrates all navigation components
 class NavigationController implements NavController {
+  final double zoomLevel;
+
   // Core services
   @override
   final RoutingEngine routingEngine;
@@ -79,6 +81,7 @@ class NavigationController implements NavController {
     RouteStyleConfig? routeStyleConfig,
     LocationPuckConfig? locationPuckConfig,
     DestinationPinConfig? destinationPinConfig,
+    this.zoomLevel = 20.0,
   }) : _routeStyleConfig = routeStyleConfig ?? RouteStyleConfig.defaultConfig,
        _locationPuckConfig =
            locationPuckConfig ?? LocationPuckThemes.defaultTheme,
@@ -284,7 +287,7 @@ class NavigationController implements NavController {
 
       await mapController.centerOnLocation(
         location: route.origin,
-        zoom: 20.0,
+        zoom: zoomLevel,
         followLocation: true,
       );
 

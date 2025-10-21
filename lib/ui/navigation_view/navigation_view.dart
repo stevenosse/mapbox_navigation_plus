@@ -251,7 +251,6 @@ class _NavigationViewState extends State<NavigationView> {
     );
   }
 
-  // Setup custom markers using AnnotationManager
   Future<void> _setupCustomMarkers() async {
     if (_mapController == null) return;
 

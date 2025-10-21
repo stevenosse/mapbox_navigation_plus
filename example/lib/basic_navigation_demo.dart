@@ -55,31 +55,7 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   final List<RouteStyleConfig> _routeStyles = [
     RouteStyleConfig.defaultConfig,
     RouteStyleThemes.darkTheme,
-    RouteStyleThemes.highContrastTheme,
-    const RouteStyleConfig(
-      routeLineStyle: RouteLineStyle(
-        color: Color(0xFFFF6600),
-        width: 14.0,
-        opacity: 0.9,
-        capStyle: LineCapStyle.round,
-        joinStyle: LineJoinStyle.round,
-      ),
-      traveledLineStyle: RouteLineStyle(
-        color: Color(0xFF888888),
-        width: 14.0,
-        opacity: 0.7,
-        capStyle: LineCapStyle.round,
-        joinStyle: LineJoinStyle.round,
-      ),
-      remainingLineStyle: RouteLineStyle(
-        color: Color(0xFFFF9900),
-        width: 14.0,
-        opacity: 1.0,
-        capStyle: LineCapStyle.round,
-        joinStyle: LineJoinStyle.round,
-      ),
-    ),
-  ];
+    RouteStyleThemes.highContrastTheme, ];
 
   final List<String> _styleNames = [
     'Default',

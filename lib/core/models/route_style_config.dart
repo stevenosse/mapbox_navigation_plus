@@ -25,22 +25,22 @@ class RouteStyleConfig {
   static const RouteStyleConfig defaultConfig = RouteStyleConfig(
     routeLineStyle: RouteLineStyle(
       color: Color(0xFF3366CC),
-      width: 12.0,
+      width: 24.0,
       opacity: 0.8,
     ),
     traveledLineStyle: RouteLineStyle(
       color: Color(0xFF999999),
-      width: 12.0,
+      width: 24.0,
       opacity: 0.7,
     ),
     remainingLineStyle: RouteLineStyle(
       color: Color(0xFF00AA00),
-      width: 12.0,
+      width: 24.0,
       opacity: 1.0,
     ),
     alternativeLineStyle: RouteLineStyle(
       color: Color(0xFFCCCCCC),
-      width: 10.0,
+      width: 15.0,
       opacity: 0.6,
     ),
   );

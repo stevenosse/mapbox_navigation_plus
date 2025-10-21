@@ -91,9 +91,6 @@ abstract class MapControllerInterface {
   /// Sets the location puck to navigation state with navigation marker (no background)
   Future<void> setNavigationLocationPuck();
 
-  /// Removes the location puck from the map
-  Future<void> hideLocationPuck();
-
   /// Configures the location puck appearance
   Future<void> configureLocationPuck(LocationPuckConfig config);
 
@@ -111,9 +108,6 @@ abstract class MapControllerInterface {
 
   /// Zooms out the map by one level
   Future<void> zoomOut();
-
-  /// Sets the map to a specific zoom level
-  Future<void> setZoom(double zoom, {CameraAnimation? animation});
 
   /// Gets the current zoom level
   Future<double> getCurrentZoom();
@@ -150,17 +144,3 @@ enum AnimationType { linear, easeInOut, easeIn, easeOut }
 
 /// Map gesture types
 enum MapGesture { pan, zoom, rotate, pitch }
-
-/// Legacy route styling options (deprecated - use RouteStyleConfig instead)
-@Deprecated('Use RouteStyleConfig and RouteLineStyle instead')
-class RouteStyle {
-  final double width;
-  final String color;
-  final double opacity;
-
-  const RouteStyle({
-    this.width = 8.0,
-    this.color = '#3366CC',
-    this.opacity = 1.0,
-  });
-}

@@ -29,14 +29,7 @@ class MapboxMapController implements MapControllerInterface {
   // Layer and source IDs for route visualization
   static const String _routeSourceId = 'route_source';
   static const String _routeLayerId = 'route_layer';
-  static const String _progressSourceId = 'progress_source';
-  static const String _progressLayerId = 'progress_layer';
-  static const String _traveledSourceId = 'traveled_source';
-  static const String _traveledLayerId = 'traveled_layer';
   static const String _markerSourceId = 'marker_source';
-
-  // Custom location puck layer and source IDs
-  static const String _locationPuckSourceId = 'location_puck_source';
 
   // Destination pin layer and source IDs
   static const String _destinationPinSourceId = 'destination_pin_source';
@@ -69,20 +62,7 @@ class MapboxMapController implements MapControllerInterface {
       mb.GeoJsonSource(
         id: _routeSourceId,
         data: '{"type":"FeatureCollection","features":[]}',
-      ),
-    );
-
-    await _mapboxMap.style.addSource(
-      mb.GeoJsonSource(
-        id: _progressSourceId,
-        data: '{"type":"FeatureCollection","features":[]}',
-      ),
-    );
-
-    await _mapboxMap.style.addSource(
-      mb.GeoJsonSource(
-        id: _traveledSourceId,
-        data: '{"type":"FeatureCollection","features":[]}',
+        lineMetrics: true,
       ),
     );
 
@@ -118,13 +98,6 @@ class MapboxMapController implements MapControllerInterface {
       'icon-ignore-placement',
       true,
     );
-
-    await _mapboxMap.style.addSource(
-      mb.GeoJsonSource(
-        id: _locationPuckSourceId,
-        data: '{"type":"FeatureCollection","features":[]}',
-      ),
-    );
   }
 
   Future<void> _createLayers() async {
@@ -156,66 +129,65 @@ class MapboxMapController implements MapControllerInterface {
       'line-opacity',
       0.8,
     );
-
-    final progressLayer = mb.LineLayer(
-      id: _progressLayerId,
-      sourceId: _progressSourceId,
-    );
-
-    try {
-      await _mapboxMap.style.addLayerAt(
-        progressLayer,
-        mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
-      );
-    } catch (e) {
-      await _mapboxMap.style.addLayer(progressLayer);
-    }
-
+    // Add border properties to replace the removed casing layer
     await _mapboxMap.style.setStyleLayerProperty(
-      _progressLayerId,
+      _routeLayerId,
+      'line-border-color',
+      '#FFFFFF',
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeLayerId,
+      'line-border-width',
+      2.0,
+    );
+  }
+
+  // Helper to apply common line style properties
+  Future<void> _applyLineStyle(String layerId, RouteLineStyle style) async {
+    await _mapboxMap.style.setStyleLayerProperty(
+      layerId,
       'line-color',
-      '#00AA00',
+      style.colorHex,
     );
     await _mapboxMap.style.setStyleLayerProperty(
-      _progressLayerId,
+      layerId,
       'line-width',
-      14.0,
+      style.width,
     );
     await _mapboxMap.style.setStyleLayerProperty(
-      _progressLayerId,
+      layerId,
       'line-opacity',
-      1.0,
-    );
-
-    final traveledLayer = mb.LineLayer(
-      id: _traveledLayerId,
-      sourceId: _traveledSourceId,
-    );
-
-    try {
-      await _mapboxMap.style.addLayerAt(
-        traveledLayer,
-        mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
-      );
-    } catch (e) {
-      await _mapboxMap.style.addLayer(traveledLayer);
-    }
-
-    await _mapboxMap.style.setStyleLayerProperty(
-      _traveledLayerId,
-      'line-color',
-      '#999999',
+      style.opacity,
     );
     await _mapboxMap.style.setStyleLayerProperty(
-      _traveledLayerId,
-      'line-width',
-      8.0,
+      layerId,
+      'line-cap',
+      style.capStyle.value,
     );
     await _mapboxMap.style.setStyleLayerProperty(
-      _traveledLayerId,
-      'line-opacity',
-      0.7,
+      layerId,
+      'line-join',
+      style.joinStyle.value,
     );
+    // Add border properties for better visibility
+    await _mapboxMap.style.setStyleLayerProperty(
+      layerId,
+      'line-border-color',
+      '#FFFFFF',
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      layerId,
+      'line-border-width',
+      2.0,
+    );
+  }
+
+  Future<void> _updateGeoJsonSource(String sourceId, String json) async {
+    await _mapboxMap.style.getSource(sourceId).then((source) async {
+      if (source is mb.GeoJsonSource) {
+        await source.updateGeoJSON(json);
+      }
+    });
   }
 
   @override
@@ -234,37 +206,10 @@ class MapboxMapController implements MapControllerInterface {
       final routeGeoJson =
           '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coordinates]},"properties":{}}';
 
-      await _mapboxMap.style.getSource(_routeSourceId).then((source) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(routeGeoJson);
-        }
-      });
+      await _updateGeoJsonSource(_routeSourceId, routeGeoJson);
 
-      await _mapboxMap.style.setStyleLayerProperty(
-        _routeLayerId,
-        'line-color',
-        routeStyle.colorHex,
-      );
-      await _mapboxMap.style.setStyleLayerProperty(
-        _routeLayerId,
-        'line-width',
-        routeStyle.width,
-      );
-      await _mapboxMap.style.setStyleLayerProperty(
-        _routeLayerId,
-        'line-opacity',
-        routeStyle.opacity,
-      );
-      await _mapboxMap.style.setStyleLayerProperty(
-        _routeLayerId,
-        'line-cap',
-        routeStyle.capStyle.value,
-      );
-      await _mapboxMap.style.setStyleLayerProperty(
-        _routeLayerId,
-        'line-join',
-        routeStyle.joinStyle.value,
-      );
+      // Style main route
+      await _applyLineStyle(_routeLayerId, routeStyle);
 
       final markers = <MapMarker>[
         MapMarker.origin(position: route.origin),
@@ -290,7 +235,6 @@ class MapboxMapController implements MapControllerInterface {
   }) async {
     try {
       final config = styleConfig ?? RouteStyleConfig.defaultConfig;
-      final traveledStyle = config.traveledLineStyle;
       final remainingStyle = config.remainingLineStyle;
 
       final route = progress.route;
@@ -304,68 +248,9 @@ class MapboxMapController implements MapControllerInterface {
         route.distance,
       );
 
-      final traveledGeometry = traveledIndices.isEmpty
-          ? <LocationPoint>[]
-          : geometry.sublist(0, traveledIndices.last + 1);
-
       final remainingGeometry = traveledIndices.isEmpty
           ? geometry
           : geometry.sublist(traveledIndices.last);
-
-      if (traveledGeometry.isNotEmpty) {
-        final traveledLineString = mb.LineString(
-          coordinates: traveledGeometry
-              .map((point) => mb.Position(point.longitude, point.latitude))
-              .toList(),
-        );
-        final traveledFeature = mb.Feature(
-          id: 'traveled',
-          geometry: traveledLineString,
-          properties: {
-            'color': traveledStyle.colorHex,
-            'width': traveledStyle.width,
-            'opacity': traveledStyle.opacity,
-          },
-        );
-
-        await _mapboxMap.style.getSource(_traveledSourceId).then((
-          source,
-        ) async {
-          if (source is mb.GeoJsonSource) {
-            await source.updateGeoJSON(
-              jsonEncode(
-                mb.FeatureCollection(features: [traveledFeature]).toJson(),
-              ),
-            );
-          }
-        });
-
-        await _mapboxMap.style.setStyleLayerProperty(
-          _traveledLayerId,
-          'line-color',
-          traveledStyle.colorHex,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _traveledLayerId,
-          'line-width',
-          traveledStyle.width,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _traveledLayerId,
-          'line-opacity',
-          traveledStyle.opacity,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _traveledLayerId,
-          'line-cap',
-          traveledStyle.capStyle.value,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _traveledLayerId,
-          'line-join',
-          traveledStyle.joinStyle.value,
-        );
-      }
 
       if (remainingGeometry.isNotEmpty) {
         final remainingLineString = mb.LineString(
@@ -383,43 +268,12 @@ class MapboxMapController implements MapControllerInterface {
           },
         );
 
-        await _mapboxMap.style.getSource(_progressSourceId).then((
-          source,
-        ) async {
-          if (source is mb.GeoJsonSource) {
-            await source.updateGeoJSON(
-              jsonEncode(
-                mb.FeatureCollection(features: [remainingFeature]).toJson(),
-              ),
-            );
-          }
-        });
+        final remainingJson = jsonEncode(
+          mb.FeatureCollection(features: [remainingFeature]).toJson(),
+        );
+        await _updateGeoJsonSource(_routeSourceId, remainingJson);
 
-        await _mapboxMap.style.setStyleLayerProperty(
-          _progressLayerId,
-          'line-color',
-          remainingStyle.colorHex,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _progressLayerId,
-          'line-width',
-          remainingStyle.width,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _progressLayerId,
-          'line-opacity',
-          remainingStyle.opacity,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _progressLayerId,
-          'line-cap',
-          remainingStyle.capStyle.value,
-        );
-        await _mapboxMap.style.setStyleLayerProperty(
-          _progressLayerId,
-          'line-join',
-          remainingStyle.joinStyle.value,
-        );
+        await _applyLineStyle(_routeLayerId, remainingStyle);
       }
     } catch (e) {
       throw Exception('Failed to update progress line: $e');
@@ -586,22 +440,6 @@ class MapboxMapController implements MapControllerInterface {
           );
         }
       });
-
-      await _mapboxMap.style.getSource(_progressSourceId).then((source) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(
-            '{"type":"FeatureCollection","features":[]}',
-          );
-        }
-      });
-
-      await _mapboxMap.style.getSource(_traveledSourceId).then((source) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(
-            '{"type":"FeatureCollection","features":[]}',
-          );
-        }
-      });
     } catch (e) {
       throw Exception('Failed to clear route: $e');
     }
@@ -762,7 +600,7 @@ class MapboxMapController implements MapControllerInterface {
         enabled: true,
         locationPuck: locationPuck,
         pulsingEnabled: false,
-        puckBearing: mb.PuckBearing.COURSE,
+        puckBearing: mb.PuckBearing.HEADING,
         puckBearingEnabled: true,
         showAccuracyRing: true,
       );
@@ -770,24 +608,6 @@ class MapboxMapController implements MapControllerInterface {
       await mapboxMap.location.updateSettings(locationSettings);
     } catch (e) {
       throw Exception('Failed to set navigation location puck: $e');
-    }
-  }
-
-  /// Removes the location puck from the map
-  @override
-  Future<void> hideLocationPuck() async {
-    try {
-      await _mapboxMap.style.getSource(_locationPuckSourceId).then((
-        source,
-      ) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(
-            '{"type":"FeatureCollection","features":[]}',
-          );
-        }
-      });
-    } catch (e) {
-      throw Exception('Failed to hide location puck: $e');
     }
   }
 
@@ -1089,10 +909,9 @@ class MapboxMapController implements MapControllerInterface {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom + 1.0).clamp(1.0, 22.0);
 
+      setFollowingLocation(false);
       await _mapboxMap.flyTo(
-        mb.CameraOptions(
-          zoom: newZoom,
-        ),
+        mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),
       );
     } catch (e) {
@@ -1105,39 +924,14 @@ class MapboxMapController implements MapControllerInterface {
     try {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom - 1.0).clamp(1.0, 22.0);
-
+      
+      setFollowingLocation(false);
       await _mapboxMap.flyTo(
-        mb.CameraOptions(
-          zoom: newZoom,
-        ),
+        mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),
       );
     } catch (e) {
       throw Exception('Failed to zoom out: $e');
-    }
-  }
-
-  @override
-  Future<void> setZoom(double zoom, {CameraAnimation? animation}) async {
-    try {
-      final clampedZoom = zoom.clamp(1.0, 22.0);
-
-      if (animation != null) {
-        await _mapboxMap.flyTo(
-          mb.CameraOptions(
-            zoom: clampedZoom,
-          ),
-          mb.MapAnimationOptions(duration: animation.duration.inMilliseconds),
-        );
-      } else {
-        await _mapboxMap.setCamera(
-          mb.CameraOptions(
-            zoom: clampedZoom,
-          ),
-        );
-      }
-    } catch (e) {
-      throw Exception('Failed to set zoom: $e');
     }
   }
 
