@@ -43,8 +43,6 @@ class MapboxMapController implements MapControllerInterface {
   LocationPuckConfig? _locationPuckConfig;
   DestinationPinConfig? _destinationPinConfig;
 
-  final StreamController<CameraPosition> _cameraPositionController =
-      StreamController<CameraPosition>.broadcast();
   final StreamController<MapGesture> _gestureController =
       StreamController<MapGesture>.broadcast();
 
@@ -452,32 +450,6 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   @override
-  Future<CameraPosition> getCameraPosition() async {
-    try {
-      final camera = await _mapboxMap.getCameraState();
-      return CameraPosition(
-        center: LocationPoint(
-          latitude: camera.center.coordinates.lat.toDouble(),
-          longitude: camera.center.coordinates.lng.toDouble(),
-          timestamp: DateTime.now(),
-        ),
-        zoom: camera.zoom,
-        bearing: camera.bearing,
-        pitch: camera.pitch,
-      );
-    } catch (e) {
-      throw Exception('Failed to get camera position: $e');
-    }
-  }
-
-  @override
-  Stream<CameraPosition> get cameraPositionStream =>
-      _cameraPositionController.stream;
-
-  @override
-  Stream<MapGesture> get gestureStream => _gestureController.stream;
-
-  @override
   bool get isFollowingLocation => _isFollowingLocation;
 
   List<int> _getTraveledGeometryIndices(
@@ -629,10 +601,7 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   /// Dispose resources
-  void dispose() {
-    _cameraPositionController.close();
-    _gestureController.close();
-  }
+  void dispose() {}
 
   /// Configures the location puck appearance
   @override
@@ -897,7 +866,6 @@ class MapboxMapController implements MapControllerInterface {
     final wasFollowing = _isFollowingLocation;
     _isFollowingLocation = follow;
 
-    // If we're enabling following mode and have a current location, refresh the view
     if (follow && !wasFollowing && _currentLocation != null) {
       centerOnLocation(location: _currentLocation!, followLocation: true);
     }
@@ -909,7 +877,6 @@ class MapboxMapController implements MapControllerInterface {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom + 1.0).clamp(1.0, 22.0);
 
-      setFollowingLocation(false);
       await _mapboxMap.flyTo(
         mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),
@@ -924,8 +891,7 @@ class MapboxMapController implements MapControllerInterface {
     try {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom - 1.0).clamp(1.0, 22.0);
-      
-      setFollowingLocation(false);
+
       await _mapboxMap.flyTo(
         mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),

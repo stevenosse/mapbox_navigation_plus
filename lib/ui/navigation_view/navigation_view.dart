@@ -52,6 +52,11 @@ class _NavigationViewState extends State<NavigationView> {
   StreamSubscription<NavigationState>? _stateSubscription;
   bool _isNavigationActive = false;
 
+  // Zoom state management
+  double? _userPreferredZoom;
+  double? _lastNavigationZoom;
+  bool _hasUserInteractedWithZoom = false;
+
   bool get isNavigationActive => _isNavigationActive;
 
   @override
@@ -85,8 +90,17 @@ class _NavigationViewState extends State<NavigationView> {
       ) {
         if (mounted) {
           setState(() {
+            final wasNavigationActive = _isNavigationActive;
             _isNavigationActive =
                 widget.navigationController!.isNavigationActive;
+
+            if (wasNavigationActive && !_isNavigationActive) {
+              _lastNavigationZoom = widget.zoom;
+            } else if (!wasNavigationActive && _isNavigationActive) {
+              if (!_hasUserInteractedWithZoom) {
+                _userPreferredZoom = _lastNavigationZoom;
+              }
+            }
           });
         }
       });
@@ -208,6 +222,14 @@ class _NavigationViewState extends State<NavigationView> {
                 : null,
             zoom: widget.initialZoom,
           ),
+          onCameraChangeListener: (cameraChangedEventData) {
+            if (!_mapController!.isFollowingLocation) {
+              setState(() {
+                _userPreferredZoom = cameraChangedEventData.cameraState.zoom;
+                _hasUserInteractedWithZoom = true;
+              });
+            }
+          },
           onMapCreated: (mb.MapboxMap mapboxMap) {
             _mapController = MapboxMapController(mapboxMap);
             widget.onMapCreated?.call(_mapController!);
@@ -228,7 +250,9 @@ class _NavigationViewState extends State<NavigationView> {
                     geometry: _calculateCombinedGeometryBounds(),
                   )
                 : mb.FollowPuckViewportState(
-                    zoom: isNavigationActive ? (widget.zoom ?? 20) : 18.5,
+                    zoom: isNavigationActive
+                        ? (widget.zoom ?? 20)
+                        : (_userPreferredZoom ?? 18.5),
                     bearing: mb.FollowPuckViewportStateBearingHeading(),
                     pitch: isNavigationActive ? (widget.pitch ?? 70.0) : 0.0,
                   );

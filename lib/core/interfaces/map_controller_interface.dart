@@ -67,15 +67,6 @@ abstract class MapControllerInterface {
   /// Clears everything from the map
   Future<void> clear();
 
-  /// Gets current camera position
-  Future<CameraPosition> getCameraPosition();
-
-  /// Stream of camera position changes
-  Stream<CameraPosition> get cameraPositionStream;
-
-  /// Stream of map gestures (user interaction)
-  Stream<MapGesture> get gestureStream;
-
   /// Whether the map is currently following user location
   bool get isFollowingLocation;
 
@@ -111,21 +102,6 @@ abstract class MapControllerInterface {
 
   /// Gets the current zoom level
   Future<double> getCurrentZoom();
-}
-
-/// Camera position information
-class CameraPosition {
-  final LocationPoint center;
-  final double zoom;
-  final double bearing;
-  final double pitch;
-
-  const CameraPosition({
-    required this.center,
-    required this.zoom,
-    this.bearing = 0.0,
-    this.pitch = 0.0,
-  });
 }
 
 /// Camera animation options
