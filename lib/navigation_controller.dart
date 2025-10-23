@@ -392,9 +392,10 @@ class NavigationController implements NavController {
 
   @override
   Future<void> recenterMap() async {
-    if (_currentProgress != null) {
+    final currentLocation = locationProvider.currentLocation;
+    if (currentLocation != null) {
       await mapController.centerOnLocation(
-        location: _currentProgress!.currentLocation,
+        location: currentLocation,
         zoom: 20,
         followLocation: true,
       );
