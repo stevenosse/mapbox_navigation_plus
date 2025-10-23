@@ -95,10 +95,10 @@ abstract class MapControllerInterface {
   Future<void> hideDestinationPin();
 
   /// Zooms in the map by one level
-  Future<void> zoomIn();
+  Future<double> zoomIn();
 
   /// Zooms out the map by one level
-  Future<void> zoomOut();
+  Future<double> zoomOut();
 
   /// Gets the current zoom level
   Future<double> getCurrentZoom();

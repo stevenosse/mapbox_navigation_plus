@@ -26,12 +26,14 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   final TextEditingController _addressController = TextEditingController();
   final FocusNode _addressFocusNode = FocusNode();
 
-  // Destination (will be set via address search)
   LocationPoint? _destination;
   String? _destinationAddress;
 
   // Current user location
   LocationPoint? _currentLocation;
+
+  double _defaultZoom = 18.5;
+  double _navigationZoom = 20.0;
 
   NavigationState _currentState = NavigationState.idle;
   RouteProgress? _currentProgress;
@@ -55,7 +57,8 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   final List<RouteStyleConfig> _routeStyles = [
     RouteStyleConfig.defaultConfig,
     RouteStyleThemes.darkTheme,
-    RouteStyleThemes.highContrastTheme, ];
+    RouteStyleThemes.highContrastTheme,
+  ];
 
   final List<String> _styleNames = [
     'Default',
@@ -119,10 +122,10 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
             initialCenter:
                 _currentLocation ??
                 _destination, // Use current location or fallback to destination
-            initialZoom: 17.0,
+            initialZoom: _defaultZoom,
             navigationController: _navigationController,
             pitch: 75,
-            zoom: 21,
+            navigationModeZoom: _navigationZoom,
             onMapCreated: (controller) async {
               _mapController = controller;
               await _initializeNavigation();
@@ -391,17 +394,33 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
             ),
 
           // Re-center button
-          if (_navigationController?.mapController.isFollowingLocation != true)
-            Positioned(
-              bottom: 100,
-              right: 16,
-              child: FloatingActionButton(
-                onPressed: _recenterMap,
-                child: const Icon(Icons.my_location),
-              ),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.1,
+            right: 16,
+            child: Column(
+              children: [
+                if (_navigationController?.mapController.isFollowingLocation !=
+                    true)
+                  FloatingActionButton(
+                    onPressed: _recenterMap,
+                    child: const Icon(Icons.my_location),
+                  ),
+                // zoom in control
+                FloatingActionButton(
+                  heroTag: 'zoomIn',
+                  onPressed: _zoomIn,
+                  child: const Icon(Icons.add),
+                ),
+                // zoom out control
+                FloatingActionButton(
+                  heroTag: 'zoomOut',
+                  onPressed: _zoomOut,
+                  child: const Icon(Icons.remove),
+                ),
+              ],
             ),
+          ),
 
-          // Quick search button (when controls are hidden)
           if (!_showControls)
             Positioned(
               top: 16,
@@ -416,6 +435,28 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
         ],
       ),
     );
+  }
+
+  void _zoomIn() async {
+    if (_mapController == null) return;
+    final zoom = await _mapController!.zoomIn();
+    _setZoom(zoom);
+  }
+
+  void _zoomOut() async {
+    if (_mapController == null) return;
+    final zoom = await _mapController!.zoomOut();
+    _setZoom(zoom);
+  }
+
+  void _setZoom(double zoom) {
+    if (_navigationController?.isNavigationActive == true) {
+      _navigationZoom = zoom;
+    } else {
+      _defaultZoom = zoom;
+    }
+
+    setState(() {});
   }
 
   Future<void> _initializeNavigation() async {

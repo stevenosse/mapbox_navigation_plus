@@ -21,7 +21,7 @@ class NavigationView extends StatefulWidget {
   final List<RouteModel>? alternativeRoutes;
   final String? highlightedRouteId;
   final double? pitch;
-  final double? zoom;
+  final double? navigationModeZoom;
   final void Function(MapboxMapController)? onMapCreated;
   final VoidCallback? onFollowingLocationStopped;
 
@@ -32,13 +32,13 @@ class NavigationView extends StatefulWidget {
     required this.mapboxAccessToken,
     this.styleUrl,
     this.initialCenter,
-    this.initialZoom = 16.0,
+    this.initialZoom = 18.5,
+    this.navigationModeZoom = 20.0,
     this.enableLocation = true,
     this.routePreview,
     this.alternativeRoutes,
     this.highlightedRouteId,
     this.pitch,
-    this.zoom,
     this.onMapCreated,
     this.onFollowingLocationStopped,
   });
@@ -51,11 +51,6 @@ class _NavigationViewState extends State<NavigationView> {
   MapboxMapController? _mapController;
   StreamSubscription<NavigationState>? _stateSubscription;
   bool _isNavigationActive = false;
-
-  // Zoom state management
-  double? _userPreferredZoom;
-  double? _lastNavigationZoom;
-  bool _hasUserInteractedWithZoom = false;
 
   bool get isNavigationActive => _isNavigationActive;
 
@@ -90,17 +85,8 @@ class _NavigationViewState extends State<NavigationView> {
       ) {
         if (mounted) {
           setState(() {
-            final wasNavigationActive = _isNavigationActive;
             _isNavigationActive =
                 widget.navigationController!.isNavigationActive;
-
-            if (wasNavigationActive && !_isNavigationActive) {
-              _lastNavigationZoom = widget.zoom;
-            } else if (!wasNavigationActive && _isNavigationActive) {
-              if (!_hasUserInteractedWithZoom) {
-                _userPreferredZoom = _lastNavigationZoom;
-              }
-            }
           });
         }
       });
@@ -222,14 +208,6 @@ class _NavigationViewState extends State<NavigationView> {
                 : null,
             zoom: widget.initialZoom,
           ),
-          onCameraChangeListener: (cameraChangedEventData) {
-            if (!_mapController!.isFollowingLocation) {
-              setState(() {
-                _userPreferredZoom = cameraChangedEventData.cameraState.zoom;
-                _hasUserInteractedWithZoom = true;
-              });
-            }
-          },
           onMapCreated: (mb.MapboxMap mapboxMap) {
             _mapController = MapboxMapController(mapboxMap);
             widget.onMapCreated?.call(_mapController!);
@@ -251,8 +229,8 @@ class _NavigationViewState extends State<NavigationView> {
                   )
                 : mb.FollowPuckViewportState(
                     zoom: isNavigationActive
-                        ? (widget.zoom ?? 20)
-                        : (_userPreferredZoom ?? 18.5),
+                        ? (widget.navigationModeZoom ?? 20)
+                        : widget.initialZoom,
                     bearing: mb.FollowPuckViewportStateBearingHeading(),
                     pitch: isNavigationActive ? (widget.pitch ?? 70.0) : 0.0,
                   );

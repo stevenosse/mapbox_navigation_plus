@@ -872,7 +872,7 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   @override
-  Future<void> zoomIn() async {
+  Future<double> zoomIn() async {
     try {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom + 1.0).clamp(1.0, 22.0);
@@ -881,13 +881,15 @@ class MapboxMapController implements MapControllerInterface {
         mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),
       );
+
+      return newZoom;
     } catch (e) {
       throw Exception('Failed to zoom in: $e');
     }
   }
 
   @override
-  Future<void> zoomOut() async {
+  Future<double> zoomOut() async {
     try {
       final currentCamera = await _mapboxMap.getCameraState();
       final newZoom = (currentCamera.zoom - 1.0).clamp(1.0, 22.0);
@@ -896,6 +898,8 @@ class MapboxMapController implements MapControllerInterface {
         mb.CameraOptions(zoom: newZoom),
         mb.MapAnimationOptions(duration: 300),
       );
+
+      return newZoom;
     } catch (e) {
       throw Exception('Failed to zoom out: $e');
     }
