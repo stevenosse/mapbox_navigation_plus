@@ -6,7 +6,6 @@ import '../models/route_progress.dart';
 import '../models/map_marker.dart';
 import '../models/route_style_config.dart';
 import '../models/location_puck_config.dart';
-import '../models/destination_pin_config.dart';
 
 /// Abstract interface for map control and visualization
 abstract class MapControllerInterface {
@@ -14,6 +13,7 @@ abstract class MapControllerInterface {
   Future<void> drawRoute({
     required RouteModel route,
     RouteStyleConfig? styleConfig,
+    bool showOriginPin = false,
   });
 
   /// Draws multiple routes on the map with different colors
@@ -84,15 +84,6 @@ abstract class MapControllerInterface {
 
   /// Configures the location puck appearance
   Future<void> configureLocationPuck(LocationPuckConfig config);
-
-  /// Sets the destination pin configuration
-  Future<void> configureDestinationPin(DestinationPinConfig config);
-
-  /// Shows destination pin at specified location
-  Future<void> showDestinationPin(LocationPoint location);
-
-  /// Hides the destination pin
-  Future<void> hideDestinationPin();
 
   /// Zooms in the map by one level
   Future<double> zoomIn();

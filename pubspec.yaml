@@ -23,6 +23,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/drapeau-darrivee.png
+    - assets/location-pin.png
     - assets/car_marker.png
     - assets/car_marker_bg.png
     - assets/default-location-puck.png

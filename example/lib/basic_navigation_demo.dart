@@ -50,10 +50,6 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   final LocationPuckConfig _currentLocationPuckStyle =
       LocationPuckThemes.defaultTheme;
 
-  // Destination pin styling options
-  final DestinationPinConfig _currentDestinationPinStyle =
-      DestinationPinConfig.defaultConfig;
-
   final List<RouteStyleConfig> _routeStyles = [
     RouteStyleConfig.defaultConfig,
     RouteStyleThemes.darkTheme,
@@ -479,7 +475,6 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
       mapController: _mapController!,
       routeStyleConfig: _currentRouteStyle,
       locationPuckConfig: _currentLocationPuckStyle,
-      destinationPinConfig: _currentDestinationPinStyle,
     );
 
     _navigationController!.addNavigationListener(this);
@@ -834,9 +829,11 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   }
 
   @override
-  void onArrival() {
+  void onArrival() async {
     setState(() {
       _statusMessage = 'You have arrived at your destination!';
     });
+
+    await _navigationController?.stopNavigation();
   }
 }

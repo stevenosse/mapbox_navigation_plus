@@ -15,7 +15,6 @@ import 'core/models/voice_instruction.dart';
 import 'core/models/route_style_config.dart';
 import 'core/models/routing_options.dart';
 import 'core/models/location_puck_config.dart';
-import 'core/models/destination_pin_config.dart';
 
 /// Main navigation controller that orchestrates all navigation components
 class NavigationController implements NavController {
@@ -42,8 +41,6 @@ class NavigationController implements NavController {
 
   // Location puck and destination pin configurations
   LocationPuckConfig _locationPuckConfig = LocationPuckThemes.defaultTheme;
-  DestinationPinConfig _destinationPinConfig =
-      DestinationPinConfig.defaultConfig;
 
   // State management
   NavigationState _currentState = NavigationState.idle;
@@ -80,13 +77,11 @@ class NavigationController implements NavController {
     required this.mapController,
     RouteStyleConfig? routeStyleConfig,
     LocationPuckConfig? locationPuckConfig,
-    DestinationPinConfig? destinationPinConfig,
+
     this.zoomLevel = 20.0,
   }) : _routeStyleConfig = routeStyleConfig ?? RouteStyleConfig.defaultConfig,
        _locationPuckConfig =
-           locationPuckConfig ?? LocationPuckThemes.defaultTheme,
-       _destinationPinConfig =
-           destinationPinConfig ?? DestinationPinConfig.defaultConfig;
+           locationPuckConfig ?? LocationPuckThemes.defaultTheme;
 
   /// Updates the route style configuration
   void updateRouteStyleConfig(RouteStyleConfig config) {
@@ -112,26 +107,6 @@ class NavigationController implements NavController {
 
   /// Gets the current location puck configuration
   LocationPuckConfig get locationPuckConfig => _locationPuckConfig;
-
-  /// Updates the destination pin configuration
-  void updateDestinationPinConfig(DestinationPinConfig config) {
-    _destinationPinConfig = config;
-    // Apply the new configuration to the map controller
-    mapController.configureDestinationPin(config);
-  }
-
-  /// Gets the current destination pin configuration
-  DestinationPinConfig get destinationPinConfig => _destinationPinConfig;
-
-  /// Shows destination pin at the specified location
-  Future<void> showDestinationPin(LocationPoint location) async {
-    await mapController.showDestinationPin(location);
-  }
-
-  /// Hides the destination pin
-  Future<void> hideDestinationPin() async {
-    await mapController.hideDestinationPin();
-  }
 
   // Stream getters
   @override
@@ -258,8 +233,6 @@ class NavigationController implements NavController {
         styleConfig: routeStyle ?? _routeStyleConfig,
       );
 
-      await showDestinationPin(route.destination);
-
       if (_locationSubscription == null) {
         await locationProvider.start();
         _locationSubscription = locationProvider.locationStream.listen(
@@ -337,9 +310,6 @@ class NavigationController implements NavController {
 
       // Clear route from map
       await mapController.clearRoute();
-
-      // Hide destination pin
-      await hideDestinationPin();
 
       // Reset camera to bird's eye view when navigation ends
       final currentLocation = locationProvider.currentLocation;

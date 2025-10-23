@@ -5,3 +5,5 @@ const kDefaultLocationPuck = 'packages/mapbox_navigation_plus/assets/default-loc
 const kDefaultNavigationLocationPuck = 'packages/mapbox_navigation_plus/assets/navigation-location-puck.png';
 
 const kDefaultLocationPuckBackground = 'packages/mapbox_navigation_plus/assets/car_marker_bg.png';
+
+const kDefaultLocationPin = 'packages/mapbox_navigation_plus/assets/location-pin.png';

@@ -100,18 +100,21 @@ class _NavigationViewState extends State<NavigationView> {
       await _mapController!.clearRoute();
       await _mapController!.clearMultipleRoutes();
 
-      final List<RouteModel> allRoutes = [];
-
       if (widget.routePreview != null) {
-        allRoutes.add(widget.routePreview!);
+        await _mapController!.drawRoute(
+          route: widget.routePreview!,
+          showOriginPin: true,
+        );
       }
 
-      if (widget.alternativeRoutes != null) {
-        allRoutes.addAll(widget.alternativeRoutes!);
+      if (widget.alternativeRoutes != null &&
+          widget.alternativeRoutes!.isNotEmpty) {
+        await _mapController!.drawMultipleRoutes(
+          routes: widget.alternativeRoutes!,
+        );
       }
 
-      if (allRoutes.isNotEmpty) {
-        await _mapController!.drawMultipleRoutes(routes: allRoutes);
+      if (widget.routePreview != null || widget.alternativeRoutes != null) {
         await _handleRouteHighlighting();
       }
     } catch (e) {

@@ -1,3 +1,5 @@
+import 'package:mapbox_navigation_plus/core/constants.dart';
+
 import 'location_point.dart';
 
 /// Map marker for navigation visualization
@@ -70,7 +72,7 @@ class MapMarker {
       position: position,
       type: MarkerType.origin,
       title: title ?? 'Start',
-      iconImage: 'origin-marker',
+      iconImage: kDefaultLocationPin,
       color: '#00AA00',
       size: MarkerSize.large,
     );
@@ -87,7 +89,7 @@ class MapMarker {
       position: position,
       type: MarkerType.destination,
       title: title ?? 'Destination',
-      iconImage: 'destination-marker',
+      iconImage: kDefaultArrivalMarker,
       color: '#CC0000',
       size: MarkerSize.large,
     );
@@ -109,59 +111,6 @@ class MapMarker {
       color: '#FF9900',
       size: MarkerSize.medium,
     );
-  }
-
-  /// Creates a current location marker
-  factory MapMarker.currentLocation({
-    required LocationPoint position,
-    double? heading,
-    String id = 'current_location_marker',
-  }) {
-    return MapMarker(
-      id: id,
-      position: position,
-      type: MarkerType.currentLocation,
-      title: 'Your Location',
-      iconImage: heading != null ? 'location-bearing-icon' : 'location-icon',
-      color: '#3366CC',
-      size: MarkerSize.medium,
-      data: {'heading': heading},
-    );
-  }
-
-  /// Creates a maneuver marker
-  factory MapMarker.maneuver({
-    required LocationPoint position,
-    required String instruction,
-    String id = 'maneuver_marker',
-  }) {
-    return MapMarker(
-      id: id,
-      position: position,
-      type: MarkerType.maneuver,
-      title: instruction,
-      iconImage: 'maneuver-marker',
-      color: '#666666',
-      size: MarkerSize.small,
-    );
-  }
-
-  /// Gets marker icon name based on type
-  String get defaultIconImage {
-    switch (type) {
-      case MarkerType.origin:
-        return 'origin-marker';
-      case MarkerType.destination:
-        return 'destination-marker';
-      case MarkerType.waypoint:
-        return 'waypoint-marker';
-      case MarkerType.currentLocation:
-        return 'location-icon';
-      case MarkerType.maneuver:
-        return 'maneuver-marker';
-      case MarkerType.custom:
-        return iconImage ?? 'default-marker';
-    }
   }
 
   /// Gets marker size in pixels

@@ -14,7 +14,6 @@ import '../../core/models/route_progress.dart';
 import '../../core/models/map_marker.dart';
 import '../../core/models/route_style_config.dart';
 import '../../core/models/location_puck_config.dart';
-import '../../core/models/destination_pin_config.dart';
 
 /// Mapbox Maps implementation of MapControllerInterface
 class MapboxMapController implements MapControllerInterface {
@@ -29,19 +28,12 @@ class MapboxMapController implements MapControllerInterface {
   // Layer and source IDs for route visualization
   static const String _routeSourceId = 'route_source';
   static const String _routeLayerId = 'route_layer';
-  static const String _markerSourceId = 'marker_source';
-
-  // Destination pin layer and source IDs
-  static const String _destinationPinSourceId = 'destination_pin_source';
-  static const String _destinationPinLayerId = 'destination_pin_layer';
 
   bool _isFollowingLocation = true;
   LocationPoint? _currentLocation;
   LocationPoint? _lastLocation;
 
-  // Configuration instances
   LocationPuckConfig? _locationPuckConfig;
-  DestinationPinConfig? _destinationPinConfig;
 
   final StreamController<MapGesture> _gestureController =
       StreamController<MapGesture>.broadcast();
@@ -62,39 +54,6 @@ class MapboxMapController implements MapControllerInterface {
         data: '{"type":"FeatureCollection","features":[]}',
         lineMetrics: true,
       ),
-    );
-
-    await _mapboxMap.style.addSource(
-      mb.GeoJsonSource(
-        id: _markerSourceId,
-        data: '{"type":"FeatureCollection","features":[]}',
-      ),
-    );
-
-    final markerLayer = mb.SymbolLayer(
-      id: 'marker_layer',
-      sourceId: _markerSourceId,
-    );
-    await _mapboxMap.style.addLayer(markerLayer);
-
-    await _mapboxMap.style.setStyleLayerProperty('marker_layer', 'icon-image', [
-      'get',
-      'icon',
-    ]);
-    await _mapboxMap.style.setStyleLayerProperty(
-      'marker_layer',
-      'icon-size',
-      1.0,
-    );
-    await _mapboxMap.style.setStyleLayerProperty(
-      'marker_layer',
-      'icon-allow-overlap',
-      true,
-    );
-    await _mapboxMap.style.setStyleLayerProperty(
-      'marker_layer',
-      'icon-ignore-placement',
-      true,
     );
   }
 
@@ -192,6 +151,7 @@ class MapboxMapController implements MapControllerInterface {
   Future<void> drawRoute({
     required RouteModel route,
     RouteStyleConfig? styleConfig,
+    bool showOriginPin = false,
   }) async {
     try {
       final config = styleConfig ?? RouteStyleConfig.defaultConfig;
@@ -206,7 +166,6 @@ class MapboxMapController implements MapControllerInterface {
 
       await _updateGeoJsonSource(_routeSourceId, routeGeoJson);
 
-      // Style main route
       await _applyLineStyle(_routeLayerId, routeStyle);
 
       final markers = <MapMarker>[
@@ -220,7 +179,7 @@ class MapboxMapController implements MapControllerInterface {
         );
       }
 
-      await addMarkers(markers);
+      await addMarkers(markers, showOriginPin: showOriginPin);
     } catch (e) {
       throw Exception('Failed to draw route: $e');
     }
@@ -279,74 +238,42 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   @override
-  Future<void> addMarkers(List<MapMarker> markers) async {
+  Future<void> addMarkers(
+    List<MapMarker> markers, {
+    bool showOriginPin = false,
+  }) async {
     try {
-      if (pointAnnotationManager != null) {
-        final pointAnnotations = <mb.PointAnnotationOptions>[];
-
-        for (final marker in markers) {
-          if (marker.type == MarkerType.destination) {
-            final flagBytes = await rootBundle.load(kDefaultArrivalMarker);
-
-            pointAnnotations.add(
-              mb.PointAnnotationOptions(
-                geometry: mb.Point(
-                  coordinates: mb.Position(
-                    marker.position.longitude,
-                    marker.position.latitude,
-                  ),
-                ),
-                image: flagBytes.buffer.asUint8List(),
-              ),
-            );
-          }
-        }
-
-        if (pointAnnotations.isNotEmpty) {
-          await pointAnnotationManager!.createMulti(pointAnnotations);
-        }
+      if (pointAnnotationManager == null) {
+        return;
       }
 
-      // Use symbol layer for other markers
-      final features = markers
-          .map((marker) {
-            String iconImage = marker.iconImage ?? marker.defaultIconImage;
+      final pointAnnotations = <mb.PointAnnotationOptions>[];
+      for (final marker in markers) {
+        final icon = switch (marker.type) {
+          MarkerType.origin when showOriginPin =>
+            marker.iconImage ?? kDefaultLocationPin,
+          MarkerType.destination => marker.iconImage ?? kDefaultArrivalMarker,
+          _ => null,
+        };
+        if (icon == null) continue;
 
-            if (marker.type == MarkerType.destination) {
-              return null;
-            }
-
-            return mb.Feature(
-              id: marker.id,
-              geometry: mb.Point(
-                coordinates: mb.Position(
-                  marker.position.longitude,
-                  marker.position.latitude,
-                ),
+        final bytes = await rootBundle.load(icon);
+        pointAnnotations.add(
+          mb.PointAnnotationOptions(
+            geometry: mb.Point(
+              coordinates: mb.Position(
+                marker.position.longitude,
+                marker.position.latitude,
               ),
-              properties: {
-                'id': marker.id,
-                'title': marker.title ?? '',
-                'subtitle': marker.subtitle ?? '',
-                'type': marker.type.name,
-                'color': marker.color,
-                'size': marker.sizeInPixels,
-                'icon': iconImage,
-                ...marker.data,
-              },
-            );
-          })
-          .where((feature) => feature != null)
-          .cast<mb.Feature>()
-          .toList();
+            ),
+            image: bytes.buffer.asUint8List(),
+          ),
+        );
+      }
 
-      await _mapboxMap.style.getSource(_markerSourceId).then((source) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(
-            jsonEncode(mb.FeatureCollection(features: features).toJson()),
-          );
-        }
-      });
+      if (pointAnnotations.isNotEmpty) {
+        await pointAnnotationManager!.createMulti(pointAnnotations);
+      }
     } catch (e) {
       throw Exception('Failed to add markers: $e');
     }
@@ -355,13 +282,7 @@ class MapboxMapController implements MapControllerInterface {
   @override
   Future<void> clearMarkers() async {
     try {
-      await _mapboxMap.style.getSource(_markerSourceId).then((source) async {
-        if (source is mb.GeoJsonSource) {
-          await source.updateGeoJSON(
-            '{"type":"FeatureCollection","features":[]}',
-          );
-        }
-      });
+      await pointAnnotationManager!.deleteAll();
     } catch (e) {
       throw Exception('Failed to clear markers: $e');
     }
@@ -438,6 +359,8 @@ class MapboxMapController implements MapControllerInterface {
           );
         }
       });
+
+      await clearMarkers();
     } catch (e) {
       throw Exception('Failed to clear route: $e');
     }
@@ -602,70 +525,6 @@ class MapboxMapController implements MapControllerInterface {
 
   /// Dispose resources
   void dispose() {}
-
-  /// Configures the location puck appearance
-  @override
-  Future<void> configureLocationPuck(LocationPuckConfig config) async {
-    _locationPuckConfig = config;
-
-    if (_currentLocation != null) {
-      await updateLocationPuck(_currentLocation!);
-    }
-  }
-
-  /// Sets the destination pin configuration
-  @override
-  Future<void> configureDestinationPin(DestinationPinConfig config) async {
-    _destinationPinConfig = config;
-  }
-
-  /// Shows destination pin at specified location
-  @override
-  Future<void> showDestinationPin(LocationPoint location) async {
-    try {
-      final config =
-          _destinationPinConfig ?? DestinationPinConfig.defaultConfig;
-
-      pointAnnotationManager ??= await _mapboxMap.annotations
-          .createPointAnnotationManager();
-
-      mb.PointAnnotationOptions annotation;
-
-      if (config.imagePath != null) {
-        final imageData = await rootBundle.load(config.imagePath!);
-        final imageBytes = imageData.buffer.asUint8List();
-
-        annotation = mb.PointAnnotationOptions(
-          geometry: mb.Point(
-            coordinates: mb.Position(location.longitude, location.latitude),
-          ),
-          image: imageBytes,
-        );
-      } else {
-        annotation = mb.PointAnnotationOptions(
-          geometry: mb.Point(
-            coordinates: mb.Position(location.longitude, location.latitude),
-          ),
-        );
-      }
-
-      await pointAnnotationManager!.create(annotation);
-    } catch (e) {
-      throw Exception('Failed to show destination pin: $e');
-    }
-  }
-
-  /// Hides the destination pin
-  @override
-  Future<void> hideDestinationPin() async {
-    try {
-      if (pointAnnotationManager != null) {
-        await pointAnnotationManager!.deleteAll();
-      }
-    } catch (e) {
-      throw Exception('Failed to hide destination pin: $e');
-    }
-  }
 
   // Multiple routes management
   final Map<String, String> _multipleRouteIds = {};
@@ -912,6 +771,16 @@ class MapboxMapController implements MapControllerInterface {
       return camera.zoom;
     } catch (e) {
       throw Exception('Failed to get current zoom: $e');
+    }
+  }
+
+  /// Configures the location puck appearance
+  @override
+  Future<void> configureLocationPuck(LocationPuckConfig config) async {
+    _locationPuckConfig = config;
+
+    if (_currentLocation != null) {
+      await updateLocationPuck(_currentLocation!);
     }
   }
 }
