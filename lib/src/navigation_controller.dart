@@ -236,30 +236,36 @@ class NavigationController implements NavController {
         styleConfig: routeStyle ?? _routeStyleConfig,
       );
 
-      if (_locationSubscription == null) {
-        await locationProvider.start();
-        _locationSubscription = locationProvider.locationStream.listen(
-          _onLocationUpdate,
+      try {
+        if (_locationSubscription == null) {
+          await locationProvider.start();
+          _locationSubscription = locationProvider.locationStream.listen(
+            _onLocationUpdate,
+          );
+        }
+
+        await progressTracker.startTracking(
+          route: route,
+          locationStream: locationProvider.locationStream,
         );
+
+        _progressSubscription = progressTracker.progressStream.listen(
+          _onProgressUpdate,
+        );
+        _maneuverSubscription = progressTracker.upcomingManeuverStream.listen(
+          _onManeuverUpdate,
+        );
+        _deviationSubscription = progressTracker.deviationStream.listen(
+          _onDeviationDetected,
+        );
+        _arrivalSubscription = progressTracker.arrivalStream.listen(
+          (_) => _onArrival(),
+        );
+      } catch (e) {
+        // If any subscription fails, clean up all created subscriptions
+        await _cleanupSubscriptions();
+        rethrow;
       }
-
-      await progressTracker.startTracking(
-        route: route,
-        locationStream: locationProvider.locationStream,
-      );
-
-      _progressSubscription = progressTracker.progressStream.listen(
-        _onProgressUpdate,
-      );
-      _maneuverSubscription = progressTracker.upcomingManeuverStream.listen(
-        _onManeuverUpdate,
-      );
-      _deviationSubscription = progressTracker.deviationStream.listen(
-        _onDeviationDetected,
-      );
-      _arrivalSubscription = progressTracker.arrivalStream.listen(
-        (_) => _onArrival(),
-      );
 
       await mapController.centerOnLocation(
         location: route.origin,
@@ -290,20 +296,9 @@ class NavigationController implements NavController {
 
       await mapController.setIdleLocationPuck();
 
-      await _locationSubscription?.cancel();
-      _locationSubscription = null;
+      await _cleanupSubscriptions();
 
       await progressTracker.stopTracking();
-
-      await _progressSubscription?.cancel();
-      await _maneuverSubscription?.cancel();
-      await _deviationSubscription?.cancel();
-      await _arrivalSubscription?.cancel();
-
-      _progressSubscription = null;
-      _maneuverSubscription = null;
-      _deviationSubscription = null;
-      _arrivalSubscription = null;
 
       // Stop voice guidance
       await voiceGuidance.stop();
@@ -515,6 +510,25 @@ class NavigationController implements NavController {
     }
   }
 
+  /// Clean up all stream subscriptions
+  Future<void> _cleanupSubscriptions() async {
+    try {
+      await _locationSubscription?.cancel();
+      await _progressSubscription?.cancel();
+      await _maneuverSubscription?.cancel();
+      await _deviationSubscription?.cancel();
+      await _arrivalSubscription?.cancel();
+    } catch (e) {
+      // Ignore cleanup errors
+    } finally {
+      _locationSubscription = null;
+      _progressSubscription = null;
+      _maneuverSubscription = null;
+      _deviationSubscription = null;
+      _arrivalSubscription = null;
+    }
+  }
+
   /// Dispose resources
   void dispose() {
     stopNavigation();
@@ -524,6 +538,8 @@ class NavigationController implements NavController {
     _upcomingManeuverController.close();
     _instructionController.close();
     _errorController.close();
+
+    _cleanupSubscriptions();
 
     _listeners.clear();
   }

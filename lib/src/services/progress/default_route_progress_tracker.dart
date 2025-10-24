@@ -35,14 +35,18 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   Maneuver? _lastAnnouncedManeuver;
 
   // Graduated deviation thresholds (meters)
-  double _warningDeviationThreshold = 30.0;
-  double _returnToRouteThreshold = 50.0;
+  double _warningDeviationThreshold = 10.0;
+  double _returnToRouteThreshold = 30.0;
   double _rerouteThreshold = 50.0;
 
   // Dynamic maneuver notification calculation
   double _currentSpeed = 0.0; // m/s
   DateTime? _lastSpeedCalculationTime;
   final List<double> _speedHistory = []; // For better speed smoothing
+
+  // Location update throttling
+  DateTime? _lastProcessedLocationTime;
+  static const Duration _locationUpdateThrottle = Duration(milliseconds: 500);
 
   // Speed-based timing configuration
   static const double _citySpeedThreshold = 15.6; // ~35 mph in m/s
@@ -83,19 +87,28 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _lastManeuverNotificationTime = null;
     _lastAnnouncedManeuver = null;
 
-    _locationSubscription = locationStream.listen(
-      _onLocationUpdate,
-      onError: (error) {
-        _progressController.addError(error);
-      },
-    );
+    try {
+      _locationSubscription = locationStream.listen(
+        _onLocationUpdate,
+        onError: (error) {
+          _progressController.addError(error);
+        },
+      );
 
-    _progressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_currentProgress != null && _shouldEmitProgress()) {
-        _lastEmittedProgress = _currentProgress;
-        _progressController.add(_currentProgress!);
-      }
-    });
+      _progressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (_currentProgress != null && _shouldEmitProgress()) {
+          _lastEmittedProgress = _currentProgress;
+          _progressController.add(_currentProgress!);
+        }
+      });
+    } catch (e) {
+      // If timer or subscription creation fails, clean up
+      _progressTimer?.cancel();
+      _progressTimer = null;
+      await _locationSubscription?.cancel();
+      _locationSubscription = null;
+      rethrow;
+    }
   }
 
   @override
@@ -119,6 +132,9 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _currentSpeed = 0.0;
     _lastSpeedCalculationTime = null;
     _speedHistory.clear();
+
+    // Clear throttling tracking
+    _lastProcessedLocationTime = null;
 
     // Clear recalculation tracking
     _lastKnownGoodManeuver = null;
@@ -158,7 +174,19 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   void _onLocationUpdate(LocationPoint location) {
     if (!_isTracking || _currentRoute == null || _startTime == null) return;
 
+    // Throttle location updates to process max every 500ms
+    final now = location.timestamp;
+    if (_lastProcessedLocationTime != null) {
+      final timeSinceLastUpdate = now.difference(_lastProcessedLocationTime!);
+      if (timeSinceLastUpdate < _locationUpdateThrottle) {
+        // Skip this update but still update location for tracking
+        _lastLocation = location;
+        return;
+      }
+    }
+
     _updateCurrentSpeed(location);
+    _lastProcessedLocationTime = now;
 
     _currentProgress = RouteProgress.fromLocationAndRoute(
       currentLocation: location,

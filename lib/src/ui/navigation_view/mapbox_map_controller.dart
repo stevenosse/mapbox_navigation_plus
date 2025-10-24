@@ -43,6 +43,15 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
   final Map<String, String> _multipleRouteIds = {};
   String? _highlightedRouteId;
 
+  // Asset cache to avoid repeated loading
+  static final Map<String, Uint8List> _assetCache = {};
+
+  // Route update debouncing
+  DateTime? _lastRouteUpdateTime;
+  LocationPoint? _lastRouteUpdateLocation;
+  static const Duration _routeUpdateThrottle = Duration(milliseconds: 300);
+  static const double _routeUpdateMinDistance = 5.0; // meters
+
   MapboxMapController(this._mapboxMap) {
     _initializeMap();
   }
@@ -303,7 +312,9 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
         };
         if (icon == null) continue;
 
-        final bytes = await rootBundle.load(icon);
+        final bytes = await _loadCachedAsset(icon);
+        if (bytes == null) continue;
+
         pointAnnotations.add(
           mb.PointAnnotationOptions(
             geometry: mb.Point(
@@ -312,7 +323,7 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
                 marker.position.latitude,
               ),
             ),
-            image: bytes.buffer.asUint8List(),
+            image: bytes,
           ),
         );
       }
@@ -463,26 +474,18 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
       Uint8List? customLocationPuckBackgroundBytes;
 
       // Load idle image
-      try {
-        final imageData = await rootBundle.load(
-          config.idleImagePath ?? kDefaultLocationPuck,
-        );
-        customLocationPuckBytes = imageData.buffer.asUint8List();
-      } catch (e) {
-        debugPrint('Failed to load idle location puck image: $e');
+      customLocationPuckBytes = await _loadCachedAsset(
+        config.idleImagePath ?? kDefaultLocationPuck,
+      );
+      if (customLocationPuckBytes == null) {
         return;
       }
 
       // Load background image for idle state if accuracy circle is enabled
       if (config.showAccuracyCircle) {
-        try {
-          final shadowData = await rootBundle.load(
-            kDefaultLocationPuckBackground,
-          );
-          customLocationPuckBackgroundBytes = shadowData.buffer.asUint8List();
-        } catch (e) {
-          debugPrint('Failed to load idle location puck background: $e');
-        }
+        customLocationPuckBackgroundBytes = await _loadCachedAsset(
+          kDefaultLocationPuckBackground,
+        );
       }
 
       // Create idle location puck with configuration
@@ -519,13 +522,10 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
 
       Uint8List? customLocationPuckBytes;
 
-      try {
-        final imageData = await rootBundle.load(
-          config.navigationImagePath ?? kDefaultNavigationLocationPuck,
-        );
-        customLocationPuckBytes = imageData.buffer.asUint8List();
-      } catch (e) {
-        debugPrint('Failed to load navigation location puck image: $e');
+      customLocationPuckBytes = await _loadCachedAsset(
+        config.navigationImagePath ?? kDefaultNavigationLocationPuck,
+      );
+      if (customLocationPuckBytes == null) {
         return;
       }
 
@@ -824,6 +824,7 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
   }
 
   double _lastKnownDistanceProgress = 0.0;
+  AnimationController? _currentRouteAnimation;
 
   @override
   Ticker createTicker(TickerCallback onTick) => Ticker(onTick);
@@ -835,6 +836,30 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
     required LocationPoint location,
   }) async {
     try {
+      // Debounce route updates to avoid excessive processing
+      final now = DateTime.now();
+      bool shouldUpdate = false;
+
+      if (_lastRouteUpdateTime == null || _lastRouteUpdateLocation == null) {
+        // First update
+        shouldUpdate = true;
+      } else {
+        final timeSinceLastUpdate = now.difference(_lastRouteUpdateTime!);
+        final distanceFromLastUpdate = location.distanceTo(_lastRouteUpdateLocation!);
+
+        // Update if enough time has passed OR significant distance moved
+        if (timeSinceLastUpdate >= _routeUpdateThrottle ||
+            distanceFromLastUpdate >= _routeUpdateMinDistance) {
+          shouldUpdate = true;
+        }
+      }
+
+      if (!shouldUpdate) {
+        return; // Skip this update
+      }
+
+      _lastRouteUpdateTime = now;
+      _lastRouteUpdateLocation = location;
       final totalRouteLength = List.generate(
         route.geometry.length - 1,
         (i) => turf.distance(
@@ -874,10 +899,15 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
         1.0,
       );
 
+      // Dispose any existing animation to prevent memory leaks
+      _currentRouteAnimation?.dispose();
+
       final controller = AnimationController(
         duration: const Duration(milliseconds: 4000),
         vsync: this,
       );
+      _currentRouteAnimation = controller;
+
       final animation = Tween(
         begin: _lastKnownDistanceProgress,
         end: targetProgress,
@@ -902,16 +932,57 @@ class MapboxMapController implements MapControllerInterface, TickerProvider {
       });
 
       controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed) controller.dispose();
+        if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+          controller.dispose();
+          if (_currentRouteAnimation == controller) {
+            _currentRouteAnimation = null;
+          }
+        }
       });
 
       _lastKnownDistanceProgress = targetProgress;
-      controller.forward();
+
+      try {
+        controller.forward();
+      } catch (e) {
+        // Clean up animation controller if forward fails
+        controller.dispose();
+        if (_currentRouteAnimation == controller) {
+          _currentRouteAnimation = null;
+        }
+        rethrow;
+      }
     } catch (e) {
       throw Exception('Failed to update route: $e');
     }
   }
 
+  /// Load asset with caching to avoid repeated I/O operations
+  Future<Uint8List?> _loadCachedAsset(String assetPath) async {
+    try {
+      // Check cache first
+      if (_assetCache.containsKey(assetPath)) {
+        return _assetCache[assetPath];
+      }
+
+      // Load from bundle and cache
+      final imageData = await rootBundle.load(assetPath);
+      final bytes = imageData.buffer.asUint8List();
+      _assetCache[assetPath] = bytes;
+      return bytes;
+    } catch (e) {
+      debugPrint('Failed to load asset $assetPath: $e');
+      return null;
+    }
+  }
+
   /// Dispose resources
-  void dispose() {}
+  void dispose() {
+    _currentRouteAnimation?.dispose();
+    _currentRouteAnimation = null;
+
+    // Reset debouncing state
+    _lastRouteUpdateTime = null;
+    _lastRouteUpdateLocation = null;
+  }
 }

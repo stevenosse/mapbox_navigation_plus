@@ -507,10 +507,15 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
 
       locationProvider.locationStream.listen((location) {
         if (_currentLocation == null) {
-          setState(() {
-            _currentLocation = location;
-            _statusMessage = 'Current location acquired. Ready to navigate!';
-          });
+          _currentLocation = location;
+          // Only update status message if it hasn't been set already
+          if (_statusMessage == 'Waiting for current location...') {
+            setState(() {
+              _statusMessage = 'Current location acquired. Ready to navigate!';
+            });
+          } else {
+            setState(() {}); // Only update currentLocation
+          }
         }
       });
     } catch (e) {
@@ -539,11 +544,16 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _statusMessage =
-          'Calculating route to ${_destinationAddress ?? 'destination'}...';
-    });
+    String newStatusMessage = 'Calculating route to ${_destinationAddress ?? 'destination'}...';
+    bool newIsLoading = true;
+    bool needsUpdate = _isLoading != newIsLoading || _statusMessage != newStatusMessage;
+
+    if (needsUpdate) {
+      setState(() {
+        _isLoading = newIsLoading;
+        _statusMessage = newStatusMessage;
+      });
+    }
 
     try {
       final result = await _navigationController!.startNavigation(
@@ -551,22 +561,18 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
         destination: _destination!,
       );
 
-      if (result.success) {
-        setState(() {
-          _statusMessage =
-              'Navigation started! Following route to ${_destinationAddress ?? 'destination'}...';
-        });
-      } else {
-        setState(() {
-          _statusMessage = 'Failed to start navigation: ${result.message}';
-        });
-      }
+      newStatusMessage = result.success
+          ? 'Navigation started! Following route to ${_destinationAddress ?? 'destination'}...'
+          : 'Failed to start navigation: ${result.message}';
+      newIsLoading = false;
+
+      setState(() {
+        _statusMessage = newStatusMessage;
+        _isLoading = newIsLoading;
+      });
     } catch (e) {
       setState(() {
         _statusMessage = 'Error starting navigation: $e';
-      });
-    } finally {
-      setState(() {
         _isLoading = false;
       });
     }
@@ -716,12 +722,20 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
           formattedAddress = _formatAddress(placemark);
         }
 
-        setState(() {
-          _destination = destinationPoint;
-          _destinationAddress = formattedAddress;
-          _statusMessage = 'Destination found! Ready to navigate.';
-          _isSearching = false;
-        });
+        // Batch state updates to reduce rebuilds
+        bool needsUpdate = _destination != destinationPoint ||
+            _destinationAddress != formattedAddress ||
+            _statusMessage != 'Destination found! Ready to navigate.' ||
+            _isSearching != false;
+
+        if (needsUpdate) {
+          setState(() {
+            _destination = destinationPoint;
+            _destinationAddress = formattedAddress;
+            _statusMessage = 'Destination found! Ready to navigate.';
+            _isSearching = false;
+          });
+        }
 
         // Optionally center map on the destination
         if (_mapController != null) {
@@ -735,12 +749,20 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
           );
         }
       } else {
-        setState(() {
-          _statusMessage = 'No results found for "$address"';
-          _destination = null;
-          _destinationAddress = null;
-          _isSearching = false;
-        });
+        // Only update if state actually changed
+        bool needsUpdate = _statusMessage != 'No results found for "$address"' ||
+            _destination != null ||
+            _destinationAddress != null ||
+            _isSearching != false;
+
+        if (needsUpdate) {
+          setState(() {
+            _statusMessage = 'No results found for "$address"';
+            _destination = null;
+            _destinationAddress = null;
+            _isSearching = false;
+          });
+        }
       }
     } catch (e) {
       String errorMessage = 'Error searching for address';
@@ -756,12 +778,20 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
         errorMessage = 'Error searching for address: ${e.toString()}';
       }
 
-      setState(() {
-        _statusMessage = errorMessage;
-        _destination = null;
-        _destinationAddress = null;
-        _isSearching = false;
-      });
+      // Only update if state actually changed
+      bool needsUpdate = _statusMessage != errorMessage ||
+          _destination != null ||
+          _destinationAddress != null ||
+          _isSearching != false;
+
+      if (needsUpdate) {
+        setState(() {
+          _statusMessage = errorMessage;
+          _destination = null;
+          _destinationAddress = null;
+          _isSearching = false;
+        });
+      }
     }
   }
 
@@ -797,9 +827,12 @@ class _BasicNavigationDemoState extends State<BasicNavigationDemo>
   // NavigationEventListener implementation
   @override
   void onNavigationStateChanged(NavigationState state) {
-    setState(() {
-      _currentState = state;
-    });
+    // Only update if state actually changed
+    if (_currentState != state) {
+      setState(() {
+        _currentState = state;
+      });
+    }
   }
 
   @override
