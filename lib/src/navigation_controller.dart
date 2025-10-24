@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:wakelock_plus/wakelock_plus.dart';
+
 import 'core/interfaces/nav_controller.dart';
 import 'core/interfaces/location_provider.dart';
 import 'core/interfaces/routing_engine.dart';
@@ -187,6 +189,7 @@ class NavigationController implements NavController {
   }) async {
     try {
       mapController.setFollowingLocation(true);
+      await WakelockPlus.enable();
       _updateState(NavigationState.routing);
 
       // Calculate route
@@ -282,19 +285,16 @@ class NavigationController implements NavController {
   @override
   Future<void> stopNavigation() async {
     try {
+      await WakelockPlus.disable();
       _updateState(NavigationState.idle);
 
-      // Reset location puck to default image when navigation ends
       await mapController.setIdleLocationPuck();
 
-      // Stop location updates
       await _locationSubscription?.cancel();
       _locationSubscription = null;
 
-      // Stop progress tracking
       await progressTracker.stopTracking();
 
-      // Cancel all subscriptions
       await _progressSubscription?.cancel();
       await _maneuverSubscription?.cancel();
       await _deviationSubscription?.cancel();
@@ -461,17 +461,15 @@ class NavigationController implements NavController {
 
   void _onLocationUpdate(LocationPoint location) {
     mapController.updateLocationPuck(location);
+
+    if (_currentRoute != null) {
+      mapController.updateRoute(route: _currentRoute!, location: location);
+    }
   }
 
   void _onProgressUpdate(RouteProgress progress) {
     _currentProgress = progress;
     _progressController.add(progress);
-
-    // Update map progress line
-    mapController.updateProgressLine(
-      progress: progress,
-      styleConfig: _routeStyleConfig,
-    );
 
     for (final listener in _listeners) {
       listener.onRouteProgressChanged(progress);

@@ -1,16 +1,16 @@
 import 'dart:async';
 
-import 'package:mapbox_navigation_plus/core/models/location_point.dart';
-import 'package:mapbox_navigation_plus/core/models/route_model.dart';
-import 'package:mapbox_navigation_plus/core/models/route_progress.dart';
-import 'package:mapbox_navigation_plus/core/models/maneuver.dart';
-import 'package:mapbox_navigation_plus/core/models/navigation_state.dart';
-import 'package:mapbox_navigation_plus/core/models/routing_options.dart';
-import 'package:mapbox_navigation_plus/core/interfaces/routing_engine.dart';
-import 'package:mapbox_navigation_plus/core/interfaces/location_provider.dart';
-import 'package:mapbox_navigation_plus/core/interfaces/route_progress_tracker.dart';
-import 'package:mapbox_navigation_plus/core/interfaces/voice_guidance.dart';
-import 'package:mapbox_navigation_plus/core/interfaces/map_controller_interface.dart';
+import 'package:mapbox_navigation_plus/src/core/models/location_point.dart';
+import 'package:mapbox_navigation_plus/src/core/models/route_model.dart';
+import 'package:mapbox_navigation_plus/src/core/models/route_progress.dart';
+import 'package:mapbox_navigation_plus/src/core/models/maneuver.dart';
+import 'package:mapbox_navigation_plus/src/core/models/navigation_state.dart';
+import 'package:mapbox_navigation_plus/src/core/models/routing_options.dart';
+import 'package:mapbox_navigation_plus/src/core/interfaces/routing_engine.dart';
+import 'package:mapbox_navigation_plus/src/core/interfaces/location_provider.dart';
+import 'package:mapbox_navigation_plus/src/core/interfaces/route_progress_tracker.dart';
+import 'package:mapbox_navigation_plus/src/core/interfaces/voice_guidance.dart';
+import 'package:mapbox_navigation_plus/src/core/interfaces/map_controller_interface.dart';
 
 /// Main navigation controller interface that orchestrates all navigation components
 abstract class NavController {

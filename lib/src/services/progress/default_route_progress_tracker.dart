@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import '../../core/interfaces/route_progress_tracker.dart';
 import '../../core/models/route_model.dart';
@@ -7,11 +8,7 @@ import '../../core/models/location_point.dart';
 import '../../core/models/maneuver.dart';
 
 /// Road type classification for adaptive timing
-enum NavigationRoadType {
-  highway,
-  suburban,
-  urban,
-}
+enum NavigationRoadType { highway, suburban, urban }
 
 /// Real implementation of RouteProgressTracker
 class DefaultRouteProgressTracker implements RouteProgressTracker {
@@ -37,20 +34,38 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   bool _hasArrived = false;
   Maneuver? _lastAnnouncedManeuver;
 
-  double _deviationThreshold = 30.0;
-  double _maneuverNotificationThreshold = 250.0;
+  // Graduated deviation thresholds (meters)
+  double _warningDeviationThreshold = 30.0;
+  double _returnToRouteThreshold = 50.0;
+  double _rerouteThreshold = 50.0;
 
-  // Speed-based timing configuration
+  // Dynamic maneuver notification calculation
   double _currentSpeed = 0.0; // m/s
   DateTime? _lastSpeedCalculationTime;
+  final List<double> _speedHistory = []; // For better speed smoothing
+
+  // Speed-based timing configuration
   static const double _citySpeedThreshold = 15.6; // ~35 mph in m/s
   static const double _highwaySpeedThreshold = 24.6; // ~55 mph in m/s
 
-  // Adaptive timing buffers (in seconds)
-  static const double _cityWarningTime = 10.0; // 10 seconds for city driving
-  static const double _highwayWarningTime = 25.0; // 25 seconds for highway driving
-  static const double _minAnnouncementDistance = 30.0; // Minimum 30m
-  static const double _maxAnnouncementDistance = 600.0; // Maximum 600m
+  // Improved timing buffers (in seconds) - increased for better reaction time
+  static const double _cityWarningTime = 15.0; // 15 seconds for city driving
+  static const double _highwayWarningTime =
+      35.0; // 35 seconds for highway driving
+  static const double _suburbanWarningTime =
+      20.0; // 20 seconds for suburban driving
+
+  // Dynamic distance thresholds (will be calculated based on speed)
+  static const double _minAnnouncementDistance =
+      100.0; // Minimum 100m for safety
+  static const double _maxAnnouncementDistance =
+      1000.0; // Maximum 1000m for highways
+  static const double _safetyBuffer = 50.0; // Additional safety buffer
+
+  // Recalculation source tracking
+  Maneuver? _lastKnownGoodManeuver;
+  int? _lastKnownGoodStepIndex;
+  LocationPoint? _lastKnownGoodLocation;
 
   @override
   Future<void> startTracking({
@@ -103,6 +118,12 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _lastAnnouncedManeuver = null;
     _currentSpeed = 0.0;
     _lastSpeedCalculationTime = null;
+    _speedHistory.clear();
+
+    // Clear recalculation tracking
+    _lastKnownGoodManeuver = null;
+    _lastKnownGoodStepIndex = null;
+    _lastKnownGoodLocation = null;
   }
 
   @override
@@ -124,25 +145,19 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
   bool get isTracking => _isTracking;
 
   @override
-  double get deviationThreshold => _deviationThreshold;
+  double get deviationThreshold => _rerouteThreshold;
 
   @override
   set deviationThreshold(double threshold) {
-    _deviationThreshold = threshold;
-  }
+    _rerouteThreshold = threshold;
 
-  @override
-  double get maneuverNotificationThreshold => _maneuverNotificationThreshold;
-
-  @override
-  set maneuverNotificationThreshold(double threshold) {
-    _maneuverNotificationThreshold = threshold;
+    _returnToRouteThreshold = threshold * 0.5;
+    _warningDeviationThreshold = threshold * 0.3;
   }
 
   void _onLocationUpdate(LocationPoint location) {
     if (!_isTracking || _currentRoute == null || _startTime == null) return;
 
-    // Update speed calculation first
     _updateCurrentSpeed(location);
 
     _currentProgress = RouteProgress.fromLocationAndRoute(
@@ -173,14 +188,83 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     final isOnRoute = _currentProgress!.isOnRoute;
     final distanceFromRoute = _currentProgress!.distanceFromRoute;
 
-    if (!isOnRoute && distanceFromRoute > _deviationThreshold) {
-      final deviation = RouteDeviation(
-        currentLocation: location,
-        distanceFromRoute: distanceFromRoute,
-        timestamp: DateTime.now(),
-      );
-      _deviationController.add(deviation);
+    if (!isOnRoute) {
+      _handleGraduatedDeviation(location, distanceFromRoute);
+    } else {
+      // Back on route - clear any deviation tracking and update known good position
+      _updateKnownGoodPosition();
     }
+  }
+
+  void _handleGraduatedDeviation(
+    LocationPoint location,
+    double distanceFromRoute,
+  ) {
+    if (distanceFromRoute > _rerouteThreshold) {
+      // Level 3: Full reroute needed - preserve recalculation source
+      _triggerFullRerouteWithSourceTracking(location, distanceFromRoute);
+    } else if (distanceFromRoute > _returnToRouteThreshold) {
+      // Level 2: Attempt return-to-route guidance
+      _attemptReturnToRoute(location, distanceFromRoute);
+    } else if (distanceFromRoute > _warningDeviationThreshold) {
+      // Level 1: Warning level - track but don't reroute yet
+      _trackDeviationWarning(location, distanceFromRoute);
+    }
+  }
+
+  void _updateKnownGoodPosition() {
+    if (_currentProgress != null) {
+      _lastKnownGoodManeuver = _currentProgress!.upcomingManeuver;
+      _lastKnownGoodStepIndex = _currentProgress!.currentStepIndex;
+      _lastKnownGoodLocation = _currentProgress!.currentLocation;
+    }
+  }
+
+  void _trackDeviationWarning(
+    LocationPoint location,
+    double distanceFromRoute,
+  ) {
+    // Log warning but don't trigger reroute yet
+    // Could be used for UI indicators or gentle guidance
+    debugPrint(
+      'Route deviation warning: ${distanceFromRoute.toStringAsFixed(1)}m from route',
+    );
+  }
+
+  void _attemptReturnToRoute(LocationPoint location, double distanceFromRoute) {
+    // Could implement logic to guide user back to route
+    // For now, just log and prepare for potential reroute
+    debugPrint(
+      'Attempting return-to-route guidance: ${distanceFromRoute.toStringAsFixed(1)}m from route',
+    );
+
+    // Update known good position in case we need to reroute
+    _updateKnownGoodPosition();
+  }
+
+  void _triggerFullRerouteWithSourceTracking(
+    LocationPoint location,
+    double distanceFromRoute,
+  ) {
+    // Ensure we have source information for recalculation
+    if (_lastKnownGoodManeuver == null) {
+      _updateKnownGoodPosition();
+    }
+
+    final deviation = RouteDeviation(
+      currentLocation: location,
+      distanceFromRoute: distanceFromRoute,
+      timestamp: DateTime.now(),
+      // Add additional context for recalculation
+      lastKnownGoodManeuver: _lastKnownGoodManeuver,
+      lastKnownGoodStepIndex: _lastKnownGoodStepIndex,
+      lastKnownGoodLocation: _lastKnownGoodLocation,
+    );
+
+    _deviationController.add(deviation);
+    debugPrint(
+      'Full reroute triggered: ${distanceFromRoute.toStringAsFixed(1)}m from route with source tracking',
+    );
   }
 
   void _checkUpcomingManeuvers() {
@@ -193,14 +277,17 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     final now = DateTime.now();
 
     // Check if this is the same maneuver as the last announced one
-    bool isSameManeuver = _lastAnnouncedManeuver != null &&
+    bool isSameManeuver =
+        _lastAnnouncedManeuver != null &&
         _lastAnnouncedManeuver!.stepIndex == upcomingManeuver.stepIndex &&
         _lastAnnouncedManeuver!.legIndex == upcomingManeuver.legIndex &&
         _lastAnnouncedManeuver!.type == upcomingManeuver.type &&
         _lastAnnouncedManeuver!.modifier == upcomingManeuver.modifier;
 
     // Calculate adaptive announcement distance based on current conditions
-    final adaptiveDistance = _calculateAdaptiveAnnouncementDistance(upcomingManeuver);
+    final adaptiveDistance = _calculateAdaptiveAnnouncementDistance(
+      upcomingManeuver,
+    );
 
     // Check if we should notify about upcoming maneuver
     bool shouldNotify = false;
@@ -227,18 +314,18 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
       switch (roadType) {
         case NavigationRoadType.highway:
           reminderDistance = 100.0; // Highway reminder distance
-          urgentDistance = 50.0;   // Highway urgent distance
-          cooldownPeriod = 20.0;   // Longer cooldown for highway
+          urgentDistance = 50.0; // Highway urgent distance
+          cooldownPeriod = 20.0; // Longer cooldown for highway
           break;
         case NavigationRoadType.urban:
-          reminderDistance = 30.0;  // Urban reminder distance
-          urgentDistance = 15.0;    // Urban urgent distance
-          cooldownPeriod = 10.0;    // Shorter cooldown for city
+          reminderDistance = 30.0; // Urban reminder distance
+          urgentDistance = 15.0; // Urban urgent distance
+          cooldownPeriod = 10.0; // Shorter cooldown for city
           break;
         case NavigationRoadType.suburban:
-          reminderDistance = 60.0;  // Suburban reminder distance
-          urgentDistance = 30.0;    // Suburban urgent distance
-          cooldownPeriod = 15.0;    // Medium cooldown for suburban
+          reminderDistance = 60.0; // Suburban reminder distance
+          urgentDistance = 30.0; // Suburban urgent distance
+          cooldownPeriod = 15.0; // Medium cooldown for suburban
           break;
       }
 
@@ -260,7 +347,8 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
         shouldNotify = true;
       }
       // Final reminder for same maneuver if significant time has passed
-      else if (distanceToManeuver <= urgentDistance && isSameManeuver &&
+      else if (distanceToManeuver <= urgentDistance &&
+          isSameManeuver &&
           timeSinceLastNotification.inSeconds > 25.0) {
         shouldNotify = true;
       }
@@ -289,8 +377,8 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
           return true;
         case ManeuverType.turn:
           return maneuver.modifier == ManeuverModifier.uTurn ||
-                 maneuver.modifier == ManeuverModifier.sharpLeft ||
-                 maneuver.modifier == ManeuverModifier.sharpRight;
+              maneuver.modifier == ManeuverModifier.sharpLeft ||
+              maneuver.modifier == ManeuverModifier.sharpRight;
         default:
           return false;
       }
@@ -304,12 +392,13 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
         return true; // Roundabouts are complex in any environment
       case ManeuverType.offRamp:
       case ManeuverType.fork:
-        return roadType == NavigationRoadType.suburban; // Only complex in suburban areas
+        return roadType ==
+            NavigationRoadType.suburban; // Only complex in suburban areas
       case ManeuverType.turn:
       case ManeuverType.merge:
         return maneuver.modifier == ManeuverModifier.uTurn ||
-               maneuver.modifier == ManeuverModifier.sharpLeft ||
-               maneuver.modifier == ManeuverModifier.sharpRight;
+            maneuver.modifier == ManeuverModifier.sharpLeft ||
+            maneuver.modifier == ManeuverModifier.sharpRight;
       default:
         return false;
     }
@@ -432,17 +521,49 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     final distance = currentLocation.distanceTo(_lastLocation!);
     final instantSpeed = distance / timeDiff;
 
-    // Apply smoothing to prevent rapid speed fluctuations
-    if (_currentSpeed == 0.0) {
-      _currentSpeed = instantSpeed;
+    // Maintain speed history for better smoothing
+    _speedHistory.add(instantSpeed);
+    if (_speedHistory.length > 5) {
+      _speedHistory.removeAt(0); // Keep only last 5 readings
+    }
+
+    // Improved speed calculation with history-based smoothing
+    if (_speedHistory.length >= 3) {
+      // Use weighted average of recent speeds with more weight on recent readings
+      final weights = [
+        0.1,
+        0.15,
+        0.25,
+        0.25,
+        0.25,
+      ]; // More weight on recent speeds
+      double weightedSpeed = 0.0;
+
+      for (int i = 0; i < _speedHistory.length; i++) {
+        weightedSpeed +=
+            _speedHistory[i] *
+            weights[weights.length - _speedHistory.length + i];
+      }
+
+      // Additional smoothing with current speed
+      if (_currentSpeed == 0.0) {
+        _currentSpeed = weightedSpeed;
+      } else {
+        _currentSpeed = (_currentSpeed * 0.6) + (weightedSpeed * 0.4);
+      }
     } else {
-      // Weighted average (70% previous, 30% new)
-      _currentSpeed = (_currentSpeed * 0.7) + (instantSpeed * 0.3);
+      // Fallback to simple smoothing for initial readings
+      if (_currentSpeed == 0.0) {
+        _currentSpeed = instantSpeed;
+      } else {
+        _currentSpeed = (_currentSpeed * 0.7) + (instantSpeed * 0.3);
+      }
     }
 
     // Reset calculation window every 5 seconds for fresh readings
     if (timeDiff > 5) {
       _lastSpeedCalculationTime = currentLocation.timestamp;
+      _speedHistory.clear(); // Clear history for fresh start
     }
   }
 
@@ -456,7 +577,8 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     }
 
     // For intermediate speeds, check current road characteristics
-    if (_currentProgress != null && _currentProgress!.currentRoadName.isNotEmpty) {
+    if (_currentProgress != null &&
+        _currentProgress!.currentRoadName.isNotEmpty) {
       final roadName = _currentProgress!.currentRoadName.toLowerCase();
 
       // Highway indicators
@@ -485,42 +607,49 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     return NavigationRoadType.suburban;
   }
 
-  /// Calculates adaptive announcement distance based on speed and road type
-  double _calculateAdaptiveAnnouncementDistance(Maneuver maneuver) {
+  /// Calculates dynamic announcement distance based on speed and road type
+  double _calculateDynamicAnnouncementDistance({Maneuver? maneuver}) {
     final roadType = _getRoadType();
     double baseTime;
 
-    // Select appropriate warning time based on road type
+    // Select appropriate warning time based on road type (using improved values)
     switch (roadType) {
       case NavigationRoadType.highway:
-        baseTime = _highwayWarningTime;
+        baseTime = _highwayWarningTime; // 35 seconds for highway
         break;
       case NavigationRoadType.urban:
-        baseTime = _cityWarningTime;
+        baseTime = _cityWarningTime; // 15 seconds for city
         break;
       case NavigationRoadType.suburban:
-        baseTime = (_cityWarningTime + _highwayWarningTime) / 2; // Average
+        baseTime = _suburbanWarningTime; // 20 seconds for suburban
         break;
     }
 
     // Add extra time for complex maneuvers
-    if (_isComplexManeuver(maneuver)) {
-      baseTime += 5.0; // Extra 5 seconds for complex maneuvers
+    if (maneuver != null && _isComplexManeuver(maneuver)) {
+      baseTime += 10.0; // Extra 10 seconds for complex maneuvers (increased)
     }
 
-    // Calculate distance = speed × time
-    double calculatedDistance = _currentSpeed * baseTime;
+    // Calculate distance = speed × time + safety buffer
+    double calculatedDistance = _currentSpeed * baseTime + _safetyBuffer;
 
     // Add complexity buffer based on maneuver type
-    calculatedDistance += _getComplexityBuffer(maneuver, roadType);
+    if (maneuver != null) {
+      calculatedDistance += _getComplexityBuffer(maneuver, roadType);
+    }
 
-    // Apply bounds
+    // Apply bounds (using improved minimum distance)
     calculatedDistance = calculatedDistance.clamp(
       _minAnnouncementDistance,
-      _maxAnnouncementDistance
+      _maxAnnouncementDistance,
     );
 
     return calculatedDistance;
+  }
+
+  /// Legacy method for backward compatibility
+  double _calculateAdaptiveAnnouncementDistance(Maneuver maneuver) {
+    return _calculateDynamicAnnouncementDistance(maneuver: maneuver);
   }
 
   /// Gets additional distance buffer for complex maneuvers
@@ -553,4 +682,7 @@ class DefaultRouteProgressTracker implements RouteProgressTracker {
     _deviationController.close();
     _arrivalController.close();
   }
+
+  @override
+  RouteModel? get currentRoute => _currentRoute;
 }

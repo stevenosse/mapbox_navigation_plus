@@ -4,9 +4,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
-import 'package:mapbox_navigation_plus/core/constants.dart';
+import 'package:mapbox_navigation_plus/src/core/constants.dart';
+import 'package:turf/turf.dart' as turf;
 import '../../core/interfaces/map_controller_interface.dart';
 import '../../core/models/route_model.dart';
 import '../../core/models/location_point.dart';
@@ -16,7 +19,7 @@ import '../../core/models/route_style_config.dart';
 import '../../core/models/location_puck_config.dart';
 
 /// Mapbox Maps implementation of MapControllerInterface
-class MapboxMapController implements MapControllerInterface {
+class MapboxMapController implements MapControllerInterface, TickerProvider {
   final mb.MapboxMap _mapboxMap;
 
   /// Get access to the underlying MapboxMap for advanced usage
@@ -28,6 +31,7 @@ class MapboxMapController implements MapControllerInterface {
   // Layer and source IDs for route visualization
   static const String _routeSourceId = 'route_source';
   static const String _routeLayerId = 'route_layer';
+  static const String _routeCasingLayerId = 'route_casing_layer';
 
   bool _isFollowingLocation = true;
   LocationPoint? _currentLocation;
@@ -35,8 +39,9 @@ class MapboxMapController implements MapControllerInterface {
 
   LocationPuckConfig? _locationPuckConfig;
 
-  final StreamController<MapGesture> _gestureController =
-      StreamController<MapGesture>.broadcast();
+  // Multiple routes management
+  final Map<String, String> _multipleRouteIds = {};
+  String? _highlightedRouteId;
 
   MapboxMapController(this._mapboxMap) {
     _initializeMap();
@@ -58,19 +63,54 @@ class MapboxMapController implements MapControllerInterface {
   }
 
   Future<void> _createLayers() async {
+    // Create casing layer (wider, white background)
+    final routeCasingLayer = mb.LineLayer(
+      id: _routeCasingLayerId,
+      sourceId: _routeSourceId,
+    );
+
+    // Create main route layer (narrower, colored)
     final routeLayer = mb.LineLayer(
       id: _routeLayerId,
       sourceId: _routeSourceId,
     );
+
     try {
+      // Add casing layer first (below main route)
       await _mapboxMap.style.addLayerAt(
-        routeLayer,
+        routeCasingLayer,
         mb.LayerPosition(below: 'mapbox-location-indicator-layer'),
       );
+
+      // Add main route layer above casing
+      await _mapboxMap.style.addLayerAt(
+        routeLayer,
+        mb.LayerPosition(above: _routeCasingLayerId),
+      );
     } catch (e) {
+      // Fallback if positioning fails
+      await _mapboxMap.style.addLayer(routeCasingLayer);
       await _mapboxMap.style.addLayer(routeLayer);
     }
 
+    // Style the casing layer (wider, white)
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-color',
+      '#FFFFFF',
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-width',
+      18.0, // Wider than main route
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-opacity',
+      0.9,
+    );
+
+    // Style the main route layer
     await _mapboxMap.style.setStyleLayerProperty(
       _routeLayerId,
       'line-color',
@@ -86,21 +126,38 @@ class MapboxMapController implements MapControllerInterface {
       'line-opacity',
       0.8,
     );
-    // Add border properties to replace the removed casing layer
-    await _mapboxMap.style.setStyleLayerProperty(
-      _routeLayerId,
-      'line-border-color',
-      '#FFFFFF',
-    );
-    await _mapboxMap.style.setStyleLayerProperty(
-      _routeLayerId,
-      'line-border-width',
-      2.0,
-    );
   }
 
   // Helper to apply common line style properties
   Future<void> _applyLineStyle(String layerId, RouteLineStyle style) async {
+    // Apply styles to the casing layer (wider, white)
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-color',
+      '#FFFFFF',
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-width',
+      style.width + 4.0, // Casing is wider than main route
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-opacity',
+      0.9,
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-cap',
+      style.capStyle.value,
+    );
+    await _mapboxMap.style.setStyleLayerProperty(
+      _routeCasingLayerId,
+      'line-join',
+      style.joinStyle.value,
+    );
+
+    // Apply styles to the main route layer
     await _mapboxMap.style.setStyleLayerProperty(
       layerId,
       'line-color',
@@ -125,17 +182,6 @@ class MapboxMapController implements MapControllerInterface {
       layerId,
       'line-join',
       style.joinStyle.value,
-    );
-    // Add border properties for better visibility
-    await _mapboxMap.style.setStyleLayerProperty(
-      layerId,
-      'line-border-color',
-      '#FFFFFF',
-    );
-    await _mapboxMap.style.setStyleLayerProperty(
-      layerId,
-      'line-border-width',
-      2.0,
     );
   }
 
@@ -523,13 +569,6 @@ class MapboxMapController implements MapControllerInterface {
     return (bearing + 360) % 360;
   }
 
-  /// Dispose resources
-  void dispose() {}
-
-  // Multiple routes management
-  final Map<String, String> _multipleRouteIds = {};
-  String? _highlightedRouteId;
-
   /// Clears all multiple routes from the map
   @override
   Future<void> clearMultipleRoutes() async {
@@ -783,4 +822,96 @@ class MapboxMapController implements MapControllerInterface {
       await updateLocationPuck(_currentLocation!);
     }
   }
+
+  double _lastKnownDistanceProgress = 0.0;
+
+  @override
+  Ticker createTicker(TickerCallback onTick) => Ticker(onTick);
+
+  /// Updates the route on the map with the current location
+  @override
+  Future<void> updateRoute({
+    required RouteModel route,
+    required LocationPoint location,
+  }) async {
+    try {
+      final totalRouteLength = List.generate(
+        route.geometry.length - 1,
+        (i) => turf.distance(
+          turf.Point(
+            coordinates: turf.Position(
+              route.geometry[i].longitude,
+              route.geometry[i].latitude,
+            ),
+          ),
+          turf.Point(
+            coordinates: turf.Position(
+              route.geometry[i + 1].longitude,
+              route.geometry[i + 1].latitude,
+            ),
+          ),
+          turf.Unit.meters,
+        ),
+      ).reduce((a, b) => a + b);
+
+      final nearestPoint = turf.nearestPointOnLine(
+        turf.LineString(
+          coordinates: route.geometry
+              .map((point) => turf.Position(point.longitude, point.latitude))
+              .toList(),
+        ),
+        turf.Point(
+          coordinates: turf.Position(location.longitude, location.latitude),
+        ),
+        turf.Unit.meters,
+      );
+
+      final distanceTraveled =
+          double.tryParse(nearestPoint.properties!['location'].toString()) ??
+          0.0;
+      final targetProgress = (distanceTraveled / totalRouteLength).clamp(
+        0.0,
+        1.0,
+      );
+
+      final controller = AnimationController(
+        duration: const Duration(milliseconds: 4000),
+        vsync: this,
+      );
+      final animation = Tween(
+        begin: _lastKnownDistanceProgress,
+        end: targetProgress,
+      ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
+
+      animation.addListener(() async {
+        final value = animation.value;
+        final trimValue = jsonEncode([0.0, value]);
+
+        Future.wait([
+          _mapboxMap.style.setStyleLayerProperty(
+            _routeLayerId,
+            'line-trim-offset',
+            trimValue,
+          ),
+          _mapboxMap.style.setStyleLayerProperty(
+            _routeCasingLayerId,
+            'line-trim-offset',
+            trimValue,
+          ),
+        ]);
+      });
+
+      controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed) controller.dispose();
+      });
+
+      _lastKnownDistanceProgress = targetProgress;
+      controller.forward();
+    } catch (e) {
+      throw Exception('Failed to update route: $e');
+    }
+  }
+
+  /// Dispose resources
+  void dispose() {}
 }

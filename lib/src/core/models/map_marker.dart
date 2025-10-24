@@ -1,4 +1,4 @@
-import 'package:mapbox_navigation_plus/core/constants.dart';
+import 'package:mapbox_navigation_plus/src/core/constants.dart';
 
 import 'location_point.dart';
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:mapbox_navigation_plus/core/models/maneuver.dart';
+import 'package:mapbox_navigation_plus/src/core/models/maneuver.dart';
 
 import '../models/route_model.dart';
 import '../models/route_progress.dart';
@@ -15,6 +15,9 @@ abstract class RouteProgressTracker {
 
   /// Stops tracking progress
   Future<void> stopTracking();
+
+  /// Current route being tracked
+  RouteModel? get currentRoute;
 
   /// Stream of route progress updates
   Stream<RouteProgress> get progressStream;
@@ -39,12 +42,6 @@ abstract class RouteProgressTracker {
 
   /// Set deviation threshold (default: 50 meters)
   set deviationThreshold(double threshold);
-
-  /// Distance threshold for maneuver notifications in meters
-  double get maneuverNotificationThreshold;
-
-  /// Set maneuver notification threshold (default: 200 meters)
-  set maneuverNotificationThreshold(double threshold);
 }
 
 /// Route deviation information
@@ -53,9 +50,17 @@ class RouteDeviation {
   final double distanceFromRoute;
   final DateTime timestamp;
 
+  // Recalculation source tracking for improved reroute logic
+  final Maneuver? lastKnownGoodManeuver;
+  final int? lastKnownGoodStepIndex;
+  final LocationPoint? lastKnownGoodLocation;
+
   const RouteDeviation({
     required this.currentLocation,
     required this.distanceFromRoute,
     required this.timestamp,
+    this.lastKnownGoodManeuver,
+    this.lastKnownGoodStepIndex,
+    this.lastKnownGoodLocation,
   });
 }

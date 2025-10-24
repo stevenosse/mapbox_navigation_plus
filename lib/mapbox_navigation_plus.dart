@@ -13,39 +13,39 @@
 library;
 
 // Core interfaces
-export 'core/interfaces/location_provider.dart';
-export 'core/interfaces/routing_engine.dart';
-export 'core/interfaces/voice_guidance.dart';
-export 'core/interfaces/route_progress_tracker.dart';
-export 'core/interfaces/map_controller_interface.dart';
-export 'core/interfaces/nav_controller.dart';
+export 'src/core/interfaces/location_provider.dart';
+export 'src/core/interfaces/routing_engine.dart';
+export 'src/core/interfaces/voice_guidance.dart';
+export 'src/core/interfaces/route_progress_tracker.dart';
+export 'src/core/interfaces/map_controller_interface.dart';
+export 'src/core/interfaces/nav_controller.dart';
 
 // Core models
-export 'core/models/location_point.dart';
-export 'core/models/navigation_state.dart';
-export 'core/models/route_model.dart';
-export 'core/models/route_progress.dart';
-export 'core/models/leg.dart';
-export 'core/models/step.dart';
-export 'core/models/maneuver.dart';
-export 'core/models/voice_instruction.dart';
-export 'core/models/map_marker.dart';
-export 'core/models/routing_options.dart';
-export 'core/models/route_style_config.dart';
-export 'core/models/location_puck_config.dart';
+export 'src/core/models/location_point.dart';
+export 'src/core/models/navigation_state.dart';
+export 'src/core/models/route_model.dart';
+export 'src/core/models/route_progress.dart';
+export 'src/core/models/leg.dart';
+export 'src/core/models/step.dart';
+export 'src/core/models/maneuver.dart';
+export 'src/core/models/voice_instruction.dart';
+export 'src/core/models/map_marker.dart';
+export 'src/core/models/routing_options.dart';
+export 'src/core/models/route_style_config.dart';
+export 'src/core/models/location_puck_config.dart';
 
 // Services
-export 'services/routing/mapbox_routing_engine.dart';
-export 'services/location/default_location_provider.dart';
-export 'services/progress/default_route_progress_tracker.dart';
-export 'services/voice/default_voice_guidance.dart';
+export 'src/services/routing/mapbox_routing_engine.dart';
+export 'src/services/location/default_location_provider.dart';
+export 'src/services/progress/default_route_progress_tracker.dart';
+export 'src/services/voice/default_voice_guidance.dart';
 
 // UI Components
-export 'ui/navigation_view/navigation_view.dart';
-export 'ui/navigation_view/mapbox_map_controller.dart';
+export 'src/ui/navigation_view/navigation_view.dart';
+export 'src/ui/navigation_view/mapbox_map_controller.dart';
 
 // Main navigation controller
-export 'navigation_controller.dart';
+export 'src/navigation_controller.dart';
 
 export 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
     show

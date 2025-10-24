@@ -93,6 +93,12 @@ abstract class MapControllerInterface {
 
   /// Gets the current zoom level
   Future<double> getCurrentZoom();
+
+  /// Updates the route on the map with the current location
+  Future<void> updateRoute({
+    required RouteModel route,
+    required LocationPoint location,
+  });
 }
 
 /// Camera animation options
